@@ -1,20 +1,15 @@
 import * as Crypto from "expo-crypto";
-import { createRemoteDream, fetchRemoteDreams } from "./api";
+import { ApiDream, createRemoteDream, deleteRemoteDream, fetchRemoteDreams, updateRemoteDream } from "./api";
 import {
+  findCachedDream,
   loadCachedDreams,
   MobileDream,
+  removeCachedDream,
   saveCachedDreams,
   upsertCachedDream,
 } from "./storage";
 
-function fromRemote(dream: {
-  id: string;
-  clientId: string | null;
-  title: string;
-  content: string;
-  dreamedAt: string;
-  mood: string | null;
-}): MobileDream {
+function fromRemote(dream: ApiDream): MobileDream {
   return {
     id: dream.id,
     clientId: dream.clientId ?? dream.id,
@@ -22,28 +17,44 @@ function fromRemote(dream: {
     body: dream.content,
     dreamedAt: dream.dreamedAt,
     mood: dream.mood ?? "unspoken",
+    tags: dream.tags,
+    vividness: dream.vividness,
+    isLucid: dream.isLucid,
+    isNightmare: dream.isNightmare,
+    isFavorite: dream.isFavorite,
     syncStatus: "synced",
+  };
+}
+
+function remotePayload(dream: MobileDream) {
+  return {
+    title: dream.title,
+    content: dream.body,
+    dreamedAt: dream.dreamedAt,
+    mood: dream.mood,
+    tags: dream.tags,
+    vividness: dream.vividness,
+    isLucid: dream.isLucid,
+    isNightmare: dream.isNightmare,
+    isFavorite: dream.isFavorite,
   };
 }
 
 async function flushPending(dreams: MobileDream[]) {
   let current = dreams;
 
-  for (const dream of dreams.filter((item) => item.syncStatus === "pending")) {
+  for (const dream of dreams.filter((item) => item.syncStatus !== "synced")) {
     try {
-      const remote = await createRemoteDream({
-        clientId: dream.clientId,
-        title: dream.title,
-        content: dream.body,
-        dreamedAt: dream.dreamedAt,
-        mood: dream.mood,
-      });
+      const remote =
+        dream.syncStatus === "pending-create"
+          ? await createRemoteDream({ clientId: dream.clientId, ...remotePayload(dream) })
+          : await updateRemoteDream(dream.id, remotePayload(dream));
 
       const synced = fromRemote(remote);
       current = [synced, ...current.filter((item) => item.clientId !== dream.clientId)];
       await saveCachedDreams(current);
     } catch {
-      // Remain pending. A later refresh will retry idempotently by clientId.
+      // Keep the local mutation queued for the next refresh.
     }
   }
 
@@ -56,12 +67,12 @@ export async function refreshDreams() {
 
   try {
     const remote = await fetchRemoteDreams();
-    const pending = afterFlush.filter((item) => item.syncStatus === "pending");
+    const pending = afterFlush.filter((item) => item.syncStatus !== "synced");
     const remoteDreams = remote.map(fromRemote);
-    const remoteClientIds = new Set(remoteDreams.map((item) => item.clientId));
+    const pendingClientIds = new Set(pending.map((item) => item.clientId));
     const merged = [
-      ...pending.filter((item) => !remoteClientIds.has(item.clientId)),
-      ...remoteDreams,
+      ...pending,
+      ...remoteDreams.filter((item) => !pendingClientIds.has(item.clientId)),
     ];
 
     await saveCachedDreams(merged);
@@ -84,24 +95,68 @@ export async function createDream(input: {
     body: input.body.trim(),
     dreamedAt: new Date().toISOString(),
     mood: input.mood,
-    syncStatus: "pending",
+    tags: [],
+    vividness: null,
+    isLucid: false,
+    isNightmare: false,
+    isFavorite: false,
+    syncStatus: "pending-create",
   };
 
   await upsertCachedDream(local);
 
   try {
-    const remote = await createRemoteDream({
-      clientId,
-      title: local.title,
-      content: local.body,
-      dreamedAt: local.dreamedAt,
-      mood: local.mood,
-    });
-
+    const remote = await createRemoteDream({ clientId, ...remotePayload(local) });
     const synced = fromRemote(remote);
     await upsertCachedDream(synced);
     return synced;
   } catch {
     return local;
   }
+}
+
+export async function updateDream(clientId: string, input: Partial<{
+  title: string;
+  body: string;
+  mood: string;
+  tags: string[];
+  vividness: number | null;
+  isLucid: boolean;
+  isNightmare: boolean;
+  isFavorite: boolean;
+}>) {
+  const existing = await findCachedDream(clientId);
+  if (!existing) throw new Error("Dream not found.");
+
+  const local: MobileDream = {
+    ...existing,
+    ...input,
+    syncStatus: existing.syncStatus === "pending-create" ? "pending-create" : "pending-update",
+  };
+
+  await upsertCachedDream(local);
+
+  if (local.syncStatus === "pending-create") return local;
+
+  try {
+    const remote = await updateRemoteDream(local.id, remotePayload(local));
+    const synced = fromRemote(remote);
+    await upsertCachedDream(synced);
+    return synced;
+  } catch {
+    return local;
+  }
+}
+
+export async function deleteDream(clientId: string) {
+  const existing = await findCachedDream(clientId);
+  if (!existing) return;
+
+  if (existing.syncStatus === "pending-create") {
+    await removeCachedDream(clientId);
+    return;
+  }
+
+  await deleteRemoteDream(existing.id);
+  await removeCachedDream(clientId);
 }

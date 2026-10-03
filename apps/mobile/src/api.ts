@@ -3,20 +3,23 @@ import * as Crypto from "expo-crypto";
 
 const SESSION_KEY = "lucid.mobile.session";
 
-type ApiDream = {
+export type ApiDream = {
   id: string;
   clientId: string | null;
   title: string;
   content: string;
   dreamedAt: string;
   mood: string | null;
+  tags: string[];
+  vividness: number | null;
+  isLucid: boolean;
+  isNightmare: boolean;
+  isFavorite: boolean;
 };
 
 function apiBaseUrl() {
   const value = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/$/, "");
-  if (!value) {
-    throw new Error("EXPO_PUBLIC_API_URL is not configured.");
-  }
+  if (!value) throw new Error("EXPO_PUBLIC_API_URL is not configured.");
   return value;
 }
 
@@ -47,7 +50,6 @@ async function lucidFetch(path: string, init?: RequestInit) {
 export async function fetchRemoteDreams() {
   const response = await lucidFetch("/api/dreams");
   if (!response.ok) throw new Error("Unable to sync dreams.");
-
   const payload = (await response.json()) as { dreams: ApiDream[] };
   return payload.dreams;
 }
@@ -58,14 +60,42 @@ export async function createRemoteDream(input: {
   content: string;
   dreamedAt: string;
   mood: string;
+  tags?: string[];
+  vividness?: number | null;
+  isLucid?: boolean;
+  isNightmare?: boolean;
+  isFavorite?: boolean;
 }) {
   const response = await lucidFetch("/api/dreams", {
     method: "POST",
     body: JSON.stringify(input),
   });
-
   if (!response.ok) throw new Error("Unable to save dream remotely.");
-
   const payload = (await response.json()) as { dream: ApiDream };
   return payload.dream;
+}
+
+export async function updateRemoteDream(id: string, input: Partial<{
+  title: string;
+  content: string;
+  dreamedAt: string;
+  mood: string;
+  tags: string[];
+  vividness: number | null;
+  isLucid: boolean;
+  isNightmare: boolean;
+  isFavorite: boolean;
+}>) {
+  const response = await lucidFetch("/api/dreams/" + encodeURIComponent(id), {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error("Unable to update dream remotely.");
+  const payload = (await response.json()) as { dream: ApiDream };
+  return payload.dream;
+}
+
+export async function deleteRemoteDream(id: string) {
+  const response = await lucidFetch("/api/dreams/" + encodeURIComponent(id), { method: "DELETE" });
+  if (!response.ok) throw new Error("Unable to delete dream remotely.");
 }
