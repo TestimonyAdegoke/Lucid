@@ -1,0 +1,35 @@
+name: Lucid CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://lucid:lucid@localhost:5432/lucid
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Validate database schema
+        run: pnpm --filter @lucid/database exec prisma validate
+
+      - name: Type-check mobile
+        run: pnpm --filter @lucid/mobile exec tsc --noEmit
+
+      - name: Build web
+        run: pnpm build:web
