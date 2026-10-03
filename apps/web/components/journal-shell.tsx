@@ -226,7 +226,7 @@ export function JournalShell() {
             {loading ? "Opening..." : syncError ? "Not synced" : "Neon synced"}
           </span>
           <button className="icon-button" onClick={() => setCustomizeOpen(true)} aria-label="Customize journal"><Palette size={18} /></button>
-          <button className="avatar" aria-label="Profile">T</button>
+          <a className="avatar" href="/account" aria-label="My Lucid account">T</a>
         </div>
       </header>
 
