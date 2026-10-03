@@ -1,116 +1,78 @@
 "use client";
 
-import { Heart, Star, Trash2, X } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { moodOptions, type FieldValues, type TemplatePrompt } from "@tardemah/domain";
+import { Heart, Star, Trash2, Users, X } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { AddQuestion } from "@/components/question-builder";
+import { TagInput } from "@/components/tag-input";
+import { TemplateFields } from "@/components/template-fields";
+import { api, type Dream } from "@/lib/client";
+import { useEscape } from "@/lib/use-escape";
 
-export type EditableDream = {
-  id: string;
-  clientId: string | null;
-  title: string;
-  body: string;
-  dreamedAt: string;
-  mood: string;
-  tags: string[];
-  vividness: number | null;
-  isLucid: boolean;
-  isNightmare: boolean;
-  isFavorite: boolean;
-};
-
-type ApiDream = {
-  id: string;
-  clientId: string | null;
-  title: string;
-  content: string;
-  dreamedAt: string;
-  mood: string | null;
-  tags: string[];
-  vividness: number | null;
-  isLucid: boolean;
-  isNightmare: boolean;
-  isFavorite: boolean;
-};
-
-function mapDream(dream: ApiDream): EditableDream {
-  return {
-    id: dream.id,
-    clientId: dream.clientId,
-    title: dream.title,
-    body: dream.content,
-    dreamedAt: dream.dreamedAt,
-    mood: dream.mood ?? "unspoken",
-    tags: dream.tags,
-    vividness: dream.vividness,
-    isLucid: dream.isLucid,
-    isNightmare: dream.isNightmare,
-    isFavorite: dream.isFavorite,
-  };
+function dateInputValue(iso: string) {
+  const date = new Date(iso);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
-
-const moods = ["peaceful", "happy", "curious", "nostalgic", "anxious", "strange"];
 
 export function DreamEditModal({
   dream,
+  sharedBookName,
   onClose,
   onSaved,
   onDeleted,
 }: {
-  dream: EditableDream;
+  dream: Dream;
+  sharedBookName: string | null;
   onClose: () => void;
-  onSaved: (dream: EditableDream) => void;
+  onSaved: (dream: Dream) => void;
   onDeleted: (id: string) => void;
 }) {
   const [title, setTitle] = useState(dream.title);
-  const [body, setBody] = useState(dream.body);
-  const [mood, setMood] = useState(dream.mood);
-  const [tags, setTags] = useState(dream.tags.join(", "));
+  const [body, setBody] = useState(dream.content);
+  const [mood, setMood] = useState(dream.mood ?? "");
+  const [tags, setTags] = useState<string[]>(dream.tags);
+  const [prompts, setPrompts] = useState<TemplatePrompt[]>(dream.fields?.prompts ?? []);
+  const promptsChanged = JSON.stringify(prompts) !== JSON.stringify(dream.fields?.prompts ?? []);
+  const [date, setDate] = useState(dateInputValue(dream.dreamedAt));
+  const [fields, setFields] = useState<FieldValues>(dream.fields?.values ?? {});
   const [vividness, setVividness] = useState(dream.vividness ?? 5);
   const [isLucid, setIsLucid] = useState(dream.isLucid);
   const [isNightmare, setIsNightmare] = useState(dream.isNightmare);
   const [isFavorite, setIsFavorite] = useState(dream.isFavorite);
+  const [shared, setShared] = useState(dream.visibility === "WORKSPACE");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setTitle(dream.title);
-    setBody(dream.body);
-    setMood(dream.mood);
-    setTags(dream.tags.join(", "));
-    setVividness(dream.vividness ?? 5);
-    setIsLucid(dream.isLucid);
-    setIsNightmare(dream.isNightmare);
-    setIsFavorite(dream.isFavorite);
-  }, [dream]);
+  useEscape(onClose, saving);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!body.trim() || saving) return;
-
     setSaving(true);
     setError(null);
 
+    const originalDay = dateInputValue(dream.dreamedAt);
     try {
-      const response = await fetch("/api/dreams/" + dream.id, {
+      const payload = await api<{ dream: Dream }>("/api/dreams/" + dream.id, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        json: {
           title,
           content: body,
           mood,
-          tags: tags.split(","),
+          tags,
+          prompts: promptsChanged ? prompts : undefined,
+          fields: dream.fields || promptsChanged ? fields : undefined,
+          dreamedAt: date !== originalDay ? new Date(date + "T04:00:00").toISOString() : undefined,
           vividness,
           isLucid,
           isNightmare,
           isFavorite,
-        }),
+          visibility: sharedBookName ? (shared ? "WORKSPACE" : "PRIVATE") : undefined,
+        },
       });
-
-      if (!response.ok) throw new Error("save-failed");
-      const payload = (await response.json()) as { dream: ApiDream };
-      onSaved(mapDream(payload.dream));
+      onSaved(payload.dream);
       onClose();
-    } catch {
-      setError("Lucid could not update this page.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Tardemah could not update this page.");
     } finally {
       setSaving(false);
     }
@@ -118,55 +80,71 @@ export function DreamEditModal({
 
   async function remove() {
     if (saving || !window.confirm("Remove this dream from your journal? This cannot be undone.")) return;
-
     setSaving(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/dreams/" + dream.id, { method: "DELETE" });
-      if (!response.ok) throw new Error("delete-failed");
+      await api("/api/dreams/" + dream.id, { method: "DELETE" });
       onDeleted(dream.id);
       onClose();
-    } catch {
-      setError("Lucid could not remove this page.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Tardemah could not remove this page.");
       setSaving(false);
     }
   }
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={() => !saving && onClose()}>
-      <form className="composer paper-modal edit-dream-modal" onSubmit={save} onMouseDown={(event) => event.stopPropagation()}>
-        <button type="button" className="modal-close" disabled={saving} onClick={onClose}><X size={18} /></button>
-        <p className="eyebrow">Edit dream page</p>
+      <form className="composer paper-modal paper-surface edit-dream-modal" onSubmit={save} onMouseDown={(event) => event.stopPropagation()} aria-label="Edit dream">
+        <button type="button" className="modal-close" disabled={saving} onClick={onClose} aria-label="Close"><X size={18} /></button>
+        <p className="eyebrow">Edit dream page{dream.fields ? " · " + dream.fields.template.name : ""}</p>
         <h2>Keep the memory true to you.</h2>
         <p className="modal-intro">Add details you remembered later, or tidy the page without changing what happened.</p>
 
-        <input className="title-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Dream title" />
-        <textarea value={body} onChange={(event) => setBody(event.target.value)} rows={8} />
+        <input className="title-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Dream title" aria-label="Title" />
+        <textarea value={body} onChange={(event) => setBody(event.target.value)} rows={8} aria-label="Dream" />
 
-        <div className="mood-picker">
-          <span>I woke up feeling</span>
-          <div>
-            {moods.map((option) => (
-              <button key={option} type="button" className={mood === option ? "selected" : ""} onClick={() => setMood(option)}>
-                {option}
-              </button>
+        <section className="questions">
+          <TemplateFields
+            prompts={prompts}
+            values={fields}
+            onChange={setFields}
+            onRemove={(id) => {
+              setPrompts((current) => current.filter((prompt) => prompt.id !== id));
+              setFields((current) => { const next = { ...current }; delete next[id]; return next; });
+            }}
+          />
+          <div className="questions-actions">
+            <AddQuestion existing={prompts} onAdd={(prompt) => setPrompts((current) => [...current, prompt])} />
+          </div>
+        </section>
+
+        <label className="editor-field">
+          <span>The night of</span>
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        </label>
+
+        <div className="detail-block">
+          <span className="detail-label">I woke up feeling</span>
+          <div className="chip-row">
+            {moodOptions.map((option) => (
+              <button key={option} type="button" className={mood === option ? "selected" : ""} onClick={() => setMood(mood === option ? "" : option)}>{option}</button>
             ))}
+            <input className="chip-input" value={moodOptions.includes(mood) ? "" : mood} onChange={(event) => setMood(event.target.value.slice(0, 50))} placeholder="or in your words…" aria-label="Your own feeling" />
           </div>
         </div>
 
-        <label className="editor-field">
-          <span>Little things I want to remember</span>
-          <input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="water, school, flying, mum..." />
-          <small>Separate tags with commas.</small>
-        </label>
+        <div className="detail-block">
+          <span className="detail-label">Little things to remember</span>
+          <TagInput tags={tags} onChange={setTags} />
+        </div>
 
         <label className="vividness-field">
           <span>How vivid was it? <strong>{vividness}/10</strong></span>
           <input type="range" min="1" max="10" value={vividness} onChange={(event) => setVividness(Number(event.target.value))} />
         </label>
 
-        <div className="dream-flags">
+        <div className="chip-row flags">
           <button type="button" className={isLucid ? "selected" : ""} onClick={() => setIsLucid((value) => !value)}>☾ I knew I was dreaming</button>
           <button type="button" className={isNightmare ? "selected" : ""} onClick={() => setIsNightmare((value) => !value)}>☁ It felt like a nightmare</button>
           <button type="button" className={isFavorite ? "selected" : ""} onClick={() => setIsFavorite((value) => !value)}>
@@ -174,12 +152,20 @@ export function DreamEditModal({
           </button>
         </div>
 
-        {error && <div className="editor-error">{error}</div>}
+        {sharedBookName && (
+          <label className="share-toggle">
+            <input type="checkbox" checked={shared} onChange={(event) => setShared(event.target.checked)} />
+            <span className="share-switch" />
+            <span><Users size={14} /> Share with <strong>{sharedBookName}</strong><small>{shared ? "Members can read it." : "Only you can see it."}</small></span>
+          </label>
+        )}
+
+        {error && <div className="editor-error" role="alert">{error}</div>}
 
         <div className="editor-actions">
           <button className="delete-page" type="button" onClick={remove} disabled={saving}><Trash2 size={15} /> Remove page</button>
           <button className="save-page compact" type="submit" disabled={!body.trim() || saving}>
-            {saving ? "Saving..." : "Save changes"} <Heart size={15} />
+            {saving ? "Saving…" : "Save changes"} <Heart size={15} />
           </button>
         </div>
       </form>

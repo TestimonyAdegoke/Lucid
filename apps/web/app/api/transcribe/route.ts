@@ -1,40 +1,43 @@
 import { NextResponse } from "next/server";
+import { ApiError, requireRole, route } from "@/lib/api";
+import { consumeMonthlyUsage, refundMonthlyUsage, workspaceEntitlements } from "@/lib/entitlements";
 import { getRequestContext } from "@/lib/session";
-import { OpenAIConfigurationError, transcribeAudio } from "@/lib/openai";
+import { isOpenAIConfigured, transcribeAudio } from "@/lib/openai";
 
 export const runtime = "nodejs";
 
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 
-export async function POST(request: Request) {
+export const POST = route("transcribe", async (request: Request) => {
+  const context = await getRequestContext(request);
+  requireRole(context, "MEMBER");
+
+  if (!isOpenAIConfigured()) {
+    throw new ApiError(503, "Voice transcription is not configured for this Tardemah environment yet.");
+  }
+
+  const form = await request.formData();
+  const value = form.get("audio") ?? form.get("file");
+
+  if (!(value instanceof File)) throw new ApiError(400, "No audio recording was received.");
+  if (!value.size) throw new ApiError(400, "The recording is empty.");
+  if (value.size > MAX_AUDIO_BYTES) {
+    throw new ApiError(413, "That recording is too large. Keep a single voice capture under 20 MB.");
+  }
+
+  const { limits } = await workspaceEntitlements(context.workspaceId);
+  await consumeMonthlyUsage(context.workspaceId, "transcription", limits.transcriptionsPerMonth);
+
   try {
-    await getRequestContext(request);
-    const form = await request.formData();
-    const value = form.get("audio") ?? form.get("file");
-
-    if (!(value instanceof File)) {
-      return NextResponse.json({ error: "No audio recording was received." }, { status: 400 });
-    }
-
-    if (!value.size) {
-      return NextResponse.json({ error: "The recording is empty." }, { status: 400 });
-    }
-
-    if (value.size > MAX_AUDIO_BYTES) {
-      return NextResponse.json({ error: "That recording is too large. Keep a single voice capture under 20 MB." }, { status: 413 });
-    }
-
     const transcript = await transcribeAudio(value);
     return NextResponse.json({ transcript, retainedAudio: false });
   } catch (error) {
-    if (error instanceof OpenAIConfigurationError) {
-      return NextResponse.json(
-        { error: "Voice transcription is not configured for this Lucid environment yet." },
-        { status: 503 },
-      );
-    }
-
+    await refundMonthlyUsage(context.workspaceId, "transcription");
     console.error("Dream transcription failed", error);
-    return NextResponse.json({ error: "Lucid could not transcribe that recording." }, { status: 502 });
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("429") || message.includes("insufficient_quota") || message.includes("quota")) {
+      throw new ApiError(502, "Voice transcription is temporarily unavailable: OpenAI API credit quota has been exhausted. Please top up API credits.");
+    }
+    throw new ApiError(502, "Tardemah could not transcribe that recording. Check OpenAI configuration or try again.");
   }
-}
+});

@@ -6,9 +6,15 @@ import { redirect } from "next/navigation";
 
 export type AuthState = { error?: string } | null;
 
+/** Only same-site relative paths are allowed as post-auth destinations (no open redirects). */
+function safeNext(value: FormDataEntryValue | null) {
+  const next = typeof value === "string" ? value : "";
+  return next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/journal";
+}
+
 export async function signUpWithEmail(_previous: AuthState, formData: FormData): Promise<AuthState> {
   if (!isAuthConfigured()) {
-    return { error: "Neon Auth has not been enabled for this Lucid environment yet." };
+    return { error: "Accounts have not been enabled for this Tardemah environment yet." };
   }
 
   const name = String(formData.get("name") ?? "").trim();
@@ -20,29 +26,23 @@ export async function signUpWithEmail(_previous: AuthState, formData: FormData):
   }
 
   const { error } = await auth.signUp.email({ name, email, password });
+  if (error) return { error: error.message || "Tardemah could not create your account." };
 
-  if (error) {
-    return { error: error.message || "Lucid could not create your account." };
-  }
-
-  redirect("/");
+  redirect(safeNext(formData.get("next")));
 }
 
 export async function signInWithEmail(_previous: AuthState, formData: FormData): Promise<AuthState> {
   if (!isAuthConfigured()) {
-    return { error: "Neon Auth has not been enabled for this Lucid environment yet." };
+    return { error: "Accounts have not been enabled for this Tardemah environment yet." };
   }
 
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
   const { error } = await auth.signIn.email({ email, password });
+  if (error) return { error: error.message || "Tardemah could not sign you in." };
 
-  if (error) {
-    return { error: error.message || "Lucid could not sign you in." };
-  }
-
-  redirect("/");
+  redirect(safeNext(formData.get("next")));
 }
 
 export async function signOut() {
@@ -50,7 +50,7 @@ export async function signOut() {
     try {
       await auth.signOut();
     } catch {
-      // The local Lucid device session is still revoked below.
+      // The local Tardemah device session is still revoked below.
     }
   }
 

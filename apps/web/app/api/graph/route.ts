@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
-import { db } from "@lucid/database";
+import { db } from "@tardemah/database";
+import { route } from "@/lib/api";
 import { calculateDreamSimilarity, type SimilarityDream } from "@/lib/dream-analysis";
+import { visibleDreamsWhere } from "@/lib/dreams";
 import { getRequestContext } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+export const GET = route("dream map", async (request: Request) => {
   const context = await getRequestContext(request);
 
   const dreams = await db.dream.findMany({
-    where: { workspaceId: context.workspaceId },
+    where: visibleDreamsWhere(context),
     include: {
       dreamTags: { include: { tag: true } },
       entities: true,
@@ -138,4 +140,4 @@ export async function GET(request: Request) {
     })),
     edges: [...entityEdges, ...connectionEdges.slice(0, 40)],
   });
-}
+});

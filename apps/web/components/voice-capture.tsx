@@ -34,12 +34,12 @@ export function VoiceCapture({ onTranscript }: { onTranscript: (text: string) =>
 
       const payload = await response.json().catch(() => ({})) as { transcript?: string; error?: string };
       if (!response.ok || !payload.transcript) {
-        throw new Error(payload.error || "Lucid could not transcribe that recording.");
+        throw new Error(payload.error || "Tardemah could not transcribe that recording.");
       }
 
       onTranscript(payload.transcript);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Lucid could not transcribe that recording.");
+      setError(cause instanceof Error ? cause.message : "Tardemah could not transcribe that recording.");
     } finally {
       setTranscribing(false);
     }
@@ -78,7 +78,7 @@ export function VoiceCapture({ onTranscript }: { onTranscript: (text: string) =>
       recorder.start();
       setRecording(true);
     } catch {
-      setError("Lucid needs microphone permission to hear your dream.");
+      setError("Tardemah needs microphone permission to hear your dream.");
     }
   }
 

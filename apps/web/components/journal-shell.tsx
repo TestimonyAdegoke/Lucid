@@ -1,150 +1,126 @@
 "use client";
 
+import { ornamentGlyphs } from "@tardemah/domain";
 import {
-  BookHeart,
-  CalendarDays,
-  ChevronRight,
+  ArrowLeft,
+  BookOpen,
   Cloud,
   CloudOff,
+  Eye,
   Heart,
+  ListTree,
   LockKeyhole,
-  MoonStar,
+  Map as MapIcon,
+  Bookmark,
   Palette,
   Pencil,
   Plus,
   Search,
-  Sparkles,
-  Star,
+  Users,
+  Waypoints,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { DreamEditModal, EditableDream } from "@/components/dream-edit-modal";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Emblem, Logo } from "@/components/brand";
+import { Composer } from "@/components/composer";
+import { DreamEditModal } from "@/components/dream-edit-modal";
 import { PatternsModal } from "@/components/patterns-modal";
-import { VoiceCapture } from "@/components/voice-capture";
+import { Studio } from "@/components/studio";
+import { FieldAnswers } from "@/components/template-fields";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { api, applyAppearance, displayDate, greeting, initials, type Dream, type Me } from "@/lib/client";
 
-type ThemeId = "lavender" | "rose" | "sage" | "midnight";
+type Filter = "all" | "kept" | "lucid" | "nightmare" | "others";
 
-type ApiDream = {
-  id: string;
-  clientId: string | null;
-  title: string;
-  content: string;
-  dreamedAt: string;
-  mood: string | null;
-  tags: string[];
-  vividness: number | null;
-  isLucid: boolean;
-  isNightmare: boolean;
-  isFavorite: boolean;
-};
-
-const themes: Array<{ id: ThemeId; name: string; note: string }> = [
-  { id: "lavender", name: "Lavender dusk", note: "soft & dreamy" },
-  { id: "rose", name: "Pressed rose", note: "warm & romantic" },
-  { id: "sage", name: "Quiet garden", note: "earthy & calm" },
-  { id: "midnight", name: "Stargazer", note: "deep & celestial" },
-];
-
-const moodOptions = ["peaceful", "happy", "curious", "nostalgic", "anxious", "strange"];
-
-function mapDream(dream: ApiDream): EditableDream {
-  return {
-    id: dream.id,
-    clientId: dream.clientId,
-    title: dream.title,
-    body: dream.content,
-    dreamedAt: dream.dreamedAt,
-    mood: dream.mood ?? "unspoken",
-    tags: dream.tags,
-    vividness: dream.vividness,
-    isLucid: dream.isLucid,
-    isNightmare: dream.isNightmare,
-    isFavorite: dream.isFavorite,
-  };
-}
-
-function displayDate(value: string, year = true) {
-  return new Intl.DateTimeFormat("en", {
-    month: "long",
-    day: "numeric",
-    ...(year ? { year: "numeric" as const } : {}),
-  }).format(new Date(value));
-}
+const shortMonth = new Intl.DateTimeFormat("en", { month: "short" });
+const monthYear = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" });
 
 export function JournalShell() {
-  const [theme, setTheme] = useState<ThemeId>("lavender");
-  const [dreams, setDreams] = useState<EditableDream[]>([]);
+  const [me, setMe] = useState<Me | null>(null);
+  const [dreams, setDreams] = useState<Dream[]>([]);
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [contentsOpen, setContentsOpen] = useState(false);
+  const [composer, setComposer] = useState<{ templateId?: string } | null>(null);
+  const [studioOpen, setStudioOpen] = useState(false);
   const [patternsOpen, setPatternsOpen] = useState(false);
-  const [editingDream, setEditingDream] = useState<EditableDream | null>(null);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [mood, setMood] = useState("peaceful");
+  const [editingDream, setEditingDream] = useState<Dream | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [now, setNow] = useState<Date | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setSyncError(null);
+    try {
+      const [mePayload, dreamPayload] = await Promise.all([
+        api<Me>("/api/me"),
+        api<{ dreams: Dream[] }>("/api/dreams"),
+      ]);
+      applyAppearance(mePayload.preferences.appearance);
+      setMe(mePayload);
+      setDreams(dreamPayload.dreams);
+      setSelectedId(dreamPayload.dreams[0]?.id ?? null);
+    } catch {
+      setSyncError("Your journal could not be reached just now.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const savedTheme = window.localStorage.getItem("lucid.theme") as ThemeId | null;
-    if (savedTheme && themes.some((item) => item.id === savedTheme)) setTheme(savedTheme);
+    setNow(new Date());
+    void load();
+  }, [load]);
 
-    async function loadJournal() {
-      try {
-        const [dreamResponse, preferenceResponse] = await Promise.all([
-          fetch("/api/dreams", { cache: "no-store" }),
-          fetch("/api/preferences", { cache: "no-store" }),
-        ]);
+  const canWrite = me ? me.workspace.role !== "VIEWER" : true;
+  const isShared = me ? !me.workspace.isPersonal : false;
+  const appearance = me?.preferences.appearance;
+  const focusLayout = appearance?.layout === "focus";
 
-        if (!dreamResponse.ok) throw new Error("database-unavailable");
-
-        const dreamPayload = (await dreamResponse.json()) as { dreams: ApiDream[] };
-        const nextDreams = dreamPayload.dreams.map(mapDream);
-        setDreams(nextDreams);
-        setSelectedId(nextDreams[0]?.id ?? null);
-
-        if (preferenceResponse.ok) {
-          const payload = await preferenceResponse.json();
-          const databaseTheme = payload.preferences?.theme as ThemeId | undefined;
-          if (databaseTheme && themes.some((item) => item.id === databaseTheme)) {
-            setTheme(databaseTheme);
-            window.localStorage.setItem("lucid.theme", databaseTheme);
-          }
-        }
-      } catch {
-        setSyncError("Your journal could not reach Neon yet.");
-      } finally {
-        setLoading(false);
-      }
+  // "n" opens a new page, like reaching for the pen on the nightstand.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement;
+      if (event.key !== "n" || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (target.closest("input, textarea, select, [contenteditable]") || document.querySelector(".modal-backdrop, .studio-sheet")) return;
+      if (me && canWrite) setComposer({});
     }
-
-    void loadJournal();
-  }, []);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [me, canWrite]);
 
   const filteredDreams = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return dreams;
-    return dreams.filter((dream) =>
-      [dream.title, dream.body, dream.mood, ...dream.tags].join(" ").toLowerCase().includes(needle),
-    );
-  }, [dreams, query]);
+    return dreams.filter((dream) => {
+      if (filter === "kept" && !dream.isFavorite) return false;
+      if (filter === "lucid" && !dream.isLucid) return false;
+      if (filter === "nightmare" && !dream.isNightmare) return false;
+      if (filter === "others" && dream.isMine) return false;
+      if (!needle) return true;
+      const answers = dream.fields ? Object.values(dream.fields.values).join(" ") : "";
+      return [dream.title, dream.content, dream.mood, answers, ...dream.tags].join(" ").toLowerCase().includes(needle);
+    });
+  }, [dreams, query, filter]);
+
+  const grouped = useMemo(() => {
+    const groups: Array<{ label: string; dreams: Dream[] }> = [];
+    for (const dream of filteredDreams) {
+      const label = monthYear.format(new Date(dream.dreamedAt));
+      const last = groups[groups.length - 1];
+      if (last?.label === label) last.dreams.push(dream);
+      else groups.push({ label, dreams: [dream] });
+    }
+    return groups;
+  }, [filteredDreams]);
 
   const selectedDream = dreams.find((dream) => dream.id === selectedId) ?? dreams[0];
+  const dreamNumber = selectedDream ? dreams.length - dreams.findIndex((item) => item.id === selectedDream.id) : 0;
 
-  function chooseTheme(nextTheme: ThemeId) {
-    setTheme(nextTheme);
-    window.localStorage.setItem("lucid.theme", nextTheme);
-    void fetch("/api/preferences", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ theme: nextTheme }),
-    }).catch(() => undefined);
-  }
-
-  function replaceDream(next: EditableDream) {
-    setDreams((current) => current.map((item) => item.id === next.id ? next : item));
+  function replaceDream(next: Dream) {
+    setDreams((current) => current.map((item) => (item.id === next.id ? next : item)));
   }
 
   function removeDream(id: string) {
@@ -153,237 +129,318 @@ export function JournalShell() {
       setSelectedId(next[0]?.id ?? null);
       return next;
     });
+    setReading(false);
   }
 
-  async function toggleFavorite(dream: EditableDream) {
-    const optimistic = { ...dream, isFavorite: !dream.isFavorite };
-    replaceDream(optimistic);
-
+  async function toggleFavorite(dream: Dream) {
+    replaceDream({ ...dream, isFavorite: !dream.isFavorite });
     try {
-      const response = await fetch("/api/dreams/" + dream.id, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isFavorite: optimistic.isFavorite }),
-      });
-      if (!response.ok) throw new Error("favorite-failed");
-      const payload = (await response.json()) as { dream: ApiDream };
-      replaceDream(mapDream(payload.dream));
+      const payload = await api<{ dream: Dream }>("/api/dreams/" + dream.id, { method: "PATCH", json: { isFavorite: !dream.isFavorite } });
+      replaceDream(payload.dream);
     } catch {
       replaceDream(dream);
     }
   }
 
-  async function saveDream(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!body.trim() || saving) return;
-
-    setSaving(true);
-    setSyncError(null);
-
+  async function switchBook(workspaceId: string) {
     try {
-      const response = await fetch("/api/dreams", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId: crypto.randomUUID(),
-          title,
-          content: body,
-          mood,
-          dreamedAt: new Date().toISOString(),
-        }),
-      });
-
-      if (!response.ok) throw new Error("save-failed");
-
-      const payload = (await response.json()) as { dream: ApiDream };
-      const next = mapDream(payload.dream);
-      setDreams((current) => [next, ...current.filter((item) => item.id !== next.id)]);
-      setSelectedId(next.id);
-      setTitle("");
-      setBody("");
-      setMood("peaceful");
-      setComposerOpen(false);
-    } catch {
-      setSyncError("This dream was not saved. Please try again when Lucid is connected.");
-    } finally {
-      setSaving(false);
+      await api("/api/workspaces/active", { method: "POST", json: { workspaceId } });
+      setFilter("all");
+      setQuery("");
+      setReading(false);
+      await load();
+    } catch (cause) {
+      setSyncError(cause instanceof Error ? cause.message : "Tardemah could not open that dream book.");
     }
   }
 
-  return (
-    <main className={"app-shell theme-" + theme}>
-      <div className="ambient ambient-one" />
-      <div className="ambient ambient-two" />
+  function open(dream: Dream) {
+    setSelectedId(dream.id);
+    setReading(true);
+    setContentsOpen(false);
+  }
 
+  const firstName = me?.user.name?.split(" ")[0];
+  const bookTitle = appearance?.bookTitle || me?.workspace.name || "My Dream Book";
+  const [cornerGlyph, markGlyph] = appearance ? ornamentGlyphs(appearance) : ["✦ · ˚ ✧", "☾"];
+  const quickTemplates = me?.templates.filter((template) => template.id !== "sys:quick").slice(0, 4) ?? [];
+  const firstDate = dreams.length ? dreams[dreams.length - 1].dreamedAt : null;
+
+  return (
+    <main className={"app-shell" + (reading ? " is-reading" : "") + (focusLayout ? " layout-focus" : "") + (contentsOpen ? " contents-open" : "")}>
       <header className="topbar">
-        <a className="brand" href="#" aria-label="Lucid home">
-          <span className="brand-mark"><MoonStar size={18} /></span>
-          <span>lucid</span>
-        </a>
+        <div className="topbar-left">
+          <a className="brand" href="/" aria-label="Tardemah home"><Logo size={32} /></a>
+          {me && <WorkspaceSwitcher me={me} onSwitch={(id) => void switchBook(id)} />}
+        </div>
         <div className="top-actions">
-          <span className="privacy"><LockKeyhole size={13} /> Private journal</span>
-          <span className={"sync-state " + (syncError ? "offline" : "online")}>
-            {syncError ? <CloudOff size={13} /> : <Cloud size={13} />}
-            {loading ? "Opening..." : syncError ? "Not synced" : "Neon synced"}
+          <span className="top-pill">
+            {isShared ? <><Users size={13} /> Shared book</> : <><LockKeyhole size={13} /> Private</>}
           </span>
-          <button className="icon-button" onClick={() => setCustomizeOpen(true)} aria-label="Customize journal"><Palette size={18} /></button>
-          <a className="avatar" href="/account" aria-label="My Lucid account">T</a>
+          <span className={"top-pill sync-state " + (syncError ? "offline" : "online")} title={syncError ?? "All pages saved"}>
+            {syncError ? <CloudOff size={13} /> : <Cloud size={13} />}
+            {loading ? "Opening…" : syncError ? "Not synced" : "Saved"}
+          </span>
+          {focusLayout && (
+            <button className="icon-button" onClick={() => setContentsOpen((value) => !value)} aria-label="Contents" title="Contents"><ListTree size={17} /></button>
+          )}
+          <a className="icon-button" href="/graph" aria-label="Dream Map" title="Dream Map"><MapIcon size={17} /></a>
+          <button className="icon-button" onClick={() => setStudioOpen(true)} aria-label="Design studio" title="Design studio" disabled={!me}><Palette size={17} /></button>
+          <a className="avatar" href="/account" aria-label="My account" title="Account">{initials(me?.user.name)}</a>
         </div>
       </header>
 
-      <section className="journal-stage">
-        <div className="journal-cover-shadow" />
-        <div className="journal">
-          <aside className="journal-index">
-            <div className="index-heading">
-              <p className="eyebrow">My dream book</p>
-              <h1>Good morning <span>♡</span></h1>
-              <p className="soft-copy">A quiet place for the things your sleeping mind wants to keep.</p>
-            </div>
+      <section className="book-stage">
+        <div className="book">
+          <div className="book-cover cover-surface" aria-hidden="true" />
+          <div className="book-edges" aria-hidden="true" />
+          <span className="book-ribbon ribbon" aria-hidden="true" />
 
-            <button className="capture-button" onClick={() => setComposerOpen(true)}>
-              <span className="capture-icon"><Plus size={20} /></span>
-              <span><strong>Write last night's dream</strong><small>Before it slips away</small></span>
-              <ChevronRight size={17} />
-            </button>
+          <div className="book-spread">
+            <aside className="journal-index paper-surface paper-deep" aria-label="Contents">
+              {focusLayout && <button className="contents-close" onClick={() => setContentsOpen(false)} aria-label="Close contents"><X size={16} /></button>}
 
-            {syncError && <div className="sync-warning">{syncError}</div>}
+              <div className="bookplate">
+                <span className="bookplate-emblem"><Emblem emblem={appearance?.emblem ?? "moon"} size={15} /></span>
+                <span className="bookplate-text">
+                  <strong>{bookTitle}</strong>
+                  <small>
+                    {isShared
+                      ? me?.workspace.memberCount + " dreamers"
+                      : firstDate ? "kept since " + monthYear.format(new Date(firstDate)) : "a new book"}
+                  </small>
+                </span>
+              </div>
 
-            <button className="patterns-button" onClick={() => setPatternsOpen(true)}>
-              <span><Sparkles size={14} /> See the threads in my dreams</span><ChevronRight size={14} />
-            </button>
+              <div className="index-heading">
+                <h1>{now ? greeting(now) : "Hello"}{firstName ? "," : ""}{firstName && <><br /><em>{firstName}</em></>}</h1>
+                <p className="soft-copy">
+                  {isShared
+                    ? me?.workspace.description || "A shared book. Your pages stay private unless you choose to share them."
+                    : "A quiet place for the things your sleeping mind wants to keep."}
+                </p>
+              </div>
 
-            <label className="search-field">
-              <Search size={16} />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search my dreams..." />
-            </label>
-
-            <div className="entry-list">
-              <div className="entry-list-label"><span>Recent pages</span><CalendarDays size={14} /></div>
-              {loading && <div className="empty-search">Opening your dream book...</div>}
-
-              {!loading && filteredDreams.map((dream) => (
-                <button key={dream.id} className={"entry-preview " + (dream.id === selectedDream?.id ? "active" : "")} onClick={() => setSelectedId(dream.id)}>
-                  <span className="entry-date">{displayDate(dream.dreamedAt, false)} {dream.isFavorite && <span className="favorite-mark">★</span>}</span>
-                  <strong>{dream.title}</strong>
-                  <p>{dream.body}</p>
-                </button>
-              ))}
-
-              {!loading && !filteredDreams.length && query && <div className="empty-search">No page in your journal matches that yet.</div>}
-              {!loading && !dreams.length && !query && (
-                <button className="first-page-card" onClick={() => setComposerOpen(true)}>
-                  <span>☾</span><strong>Your first page is waiting.</strong><p>Even one image, feeling, person or colour is enough to begin.</p>
-                </button>
-              )}
-            </div>
-
-            <div className="index-footer">
-              <Sparkles size={14} />
-              <span>{dreams.length >= 3 ? "Lucid is beginning to notice little threads between your dreams." : "The more you remember, the more personal this book becomes."}</span>
-            </div>
-          </aside>
-
-          <article className="journal-page">
-            <div className="binding-line" />
-            {selectedDream && <div className="page-tape">dream no. {dreams.findIndex((item) => item.id === selectedDream.id) + 1}</div>}
-
-            {selectedDream ? (
-              <>
-                <div className="page-date">{displayDate(selectedDream.dreamedAt)}</div>
-                <h2>{selectedDream.title}</h2>
-                <div className="mood-line"><span className={"mood-dot mood-" + selectedDream.mood} />I woke up feeling <em>{selectedDream.mood}</em></div>
-
-                <div className="page-actions">
-                  <button className={"page-action " + (selectedDream.isFavorite ? "active" : "")} onClick={() => void toggleFavorite(selectedDream)}>
-                    <Star size={13} /> {selectedDream.isFavorite ? "Kept close" : "Keep close"}
+              {canWrite ? (
+                <>
+                  <button className="capture-button" onClick={() => setComposer({})} disabled={!me}>
+                    <span className="capture-icon"><Plus size={19} /></span>
+                    <span className="capture-text"><strong>Write last night&apos;s dream</strong><small>before it slips away</small></span>
+                    <kbd>N</kbd>
                   </button>
-                  <button className="page-action" onClick={() => setEditingDream(selectedDream)}><Pencil size={13} /> Edit page</button>
+                  {quickTemplates.length > 0 && (
+                    <div className="quick-templates" aria-label="Start from a template">
+                      {quickTemplates.map((template) => (
+                        <button key={template.id} onClick={() => setComposer({ templateId: template.id })} title={template.description}>
+                          <span>{template.icon}</span>{template.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="reader-note"><Eye size={15} /> You&apos;re a reader in this book. Shared pages appear here.</div>
+              )}
+
+              {syncError && (
+                <div className="sync-warning" role="alert">
+                  {syncError} <button onClick={() => void load()}>Try again</button>
                 </div>
+              )}
 
-                <p className="dream-body">{selectedDream.body}</p>
+              <div className="index-tools">
+                <label className="search-field">
+                  <Search size={15} />
+                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pages" aria-label="Search dreams" />
+                </label>
+                <button className="tool-chip" onClick={() => setPatternsOpen(true)} title="Threads in my dreams"><Waypoints size={14} /></button>
+              </div>
 
-                <div className="tag-row">
-                  {selectedDream.tags.map((tag) => <span key={tag}>#{tag}</span>)}
-                  {!selectedDream.tags.length && <span>#freshly-written</span>}
-                </div>
+              <div className="filter-chips" role="tablist" aria-label="Filter dreams">
+                {([
+                  ["all", "All pages"],
+                  ["kept", "Kept close"],
+                  ["lucid", "Lucid"],
+                  ["nightmare", "Nightmares"],
+                  ...(isShared ? [["others", "From others"]] : []),
+                ] as Array<[Filter, string]>).map(([id, label]) => (
+                  <button key={id} role="tab" aria-selected={filter === id} className={filter === id ? "active" : ""} onClick={() => setFilter(id)}>{label}</button>
+                ))}
+              </div>
 
-                {(selectedDream.vividness || selectedDream.isLucid || selectedDream.isNightmare) && (
-                  <div className="dream-meta">
-                    {selectedDream.vividness && <span>✦ vivid {selectedDream.vividness}/10</span>}
-                    {selectedDream.isLucid && <span>☾ lucid dream</span>}
-                    {selectedDream.isNightmare && <span>☁ nightmare</span>}
+              <div className="entry-list">
+                {loading && (
+                  <div className="entry-skeletons" aria-label="Opening your dream book">
+                    <span /><span /><span />
                   </div>
                 )}
 
-                <div className="reflection-card">
-                  <div className="reflection-icon"><Sparkles size={17} /></div>
-                  <div>
-                    <span className="reflection-label">A gentle reflection</span>
-                    <p>As this journal grows, Lucid can notice repeating people, places and feelings without deciding what your dream must mean.</p>
-                    <button onClick={() => setPatternsOpen(true)}>Explore my patterns <ChevronRight size={14} /></button>
+                {!loading && grouped.map((group) => (
+                  <div key={group.label} className="entry-group">
+                    <div className="entry-list-label"><span>{group.label}</span><i /></div>
+                    {group.dreams.map((dream) => {
+                      const date = new Date(dream.dreamedAt);
+                      return (
+                        <button key={dream.id} className={"entry-preview " + (dream.id === selectedDream?.id ? "active" : "")} onClick={() => open(dream)}>
+                          <span className="entry-day"><b>{date.getDate()}</b><small>{shortMonth.format(date)}</small></span>
+                          <span className="entry-text">
+                            <strong>{dream.fields && <span className="entry-template-icon">{dream.fields.template.icon}</span>}{dream.title}</strong>
+                            <span className="entry-snippet">{dream.content}</span>
+                            <span className="entry-flags">
+                              {dream.isFavorite && <span className="flag-kept"><Bookmark size={10} style={{ display: "inline", verticalAlign: "-1px", marginRight: 3 }} />kept</span>}
+                              {dream.isLucid && <span>lucid</span>}
+                              {dream.isNightmare && <span>nightmare</span>}
+                              {!dream.isMine && <span>{dream.author?.name ?? "member"}</span>}
+                              {dream.isMine && dream.visibility === "WORKSPACE" && <span>shared</span>}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
-                </div>
+                ))}
 
-                <div className="page-note"><Heart size={14} /><span>Only you can see this page.</span></div>
-              </>
-            ) : (
-              <div className="blank-page">
-                <BookHeart size={36} /><h2>Your journal is ready.</h2>
-                <p>No sample dreams. No pretend memories. This book begins with yours.</p>
-                <button onClick={() => setComposerOpen(true)}>Write your first dream</button>
+                {!loading && !filteredDreams.length && (query || filter !== "all") && (
+                  <div className="empty-search">No page in your journal matches that yet.</div>
+                )}
+                {!loading && !dreams.length && !query && filter === "all" && canWrite && (
+                  <button className="first-page-card" onClick={() => setComposer({})}>
+                    <span>{markGlyph || "☾"}</span><strong>Your first page is waiting.</strong><p>Even one image, feeling, person or colour is enough to begin.</p>
+                  </button>
+                )}
               </div>
-            )}
+            </aside>
 
-            <div className="doodle doodle-stars">✦ · ˚ ✧</div>
-            <div className="doodle doodle-moon">☾</div>
-          </article>
+            <article className="journal-page paper-surface" aria-live="polite">
+              <button className="reading-back" onClick={() => setReading(false)}><ArrowLeft size={15} /> All pages</button>
+
+              {selectedDream ? (
+                <div className="page-content" key={selectedDream.id}>
+                  <div className="running-head">
+                    <span>{bookTitle}</span>
+                    <span>No. {dreamNumber}</span>
+                  </div>
+
+                  <div className="page-date">{displayDate(selectedDream.dreamedAt)}</div>
+                  <h2>{selectedDream.title}</h2>
+                  <div className="mood-line">
+                    <span className="mood-dot" />
+                    {selectedDream.mood ? <>I woke up feeling <em>{selectedDream.mood}</em></> : <>A feeling I didn&apos;t name</>}
+                    {!selectedDream.isMine && <span className="page-author">· written by {selectedDream.author?.name ?? "a member"}</span>}
+                  </div>
+
+                  {selectedDream.isMine && canWrite && (
+                    <div className="page-actions">
+                      <button className={"page-action " + (selectedDream.isFavorite ? "active" : "")} onClick={() => void toggleFavorite(selectedDream)}>
+                        <Bookmark size={13} fill={selectedDream.isFavorite ? "currentColor" : "none"} /> {selectedDream.isFavorite ? "Kept close" : "Keep close"}
+                      </button>
+                      <button className="page-action" onClick={() => setEditingDream(selectedDream)}><Pencil size={13} /> Edit page</button>
+                    </div>
+                  )}
+
+                  <p className="dream-body">{selectedDream.content}</p>
+
+                  {selectedDream.fields && (
+                    <FieldAnswers
+                      title={selectedDream.fields.template.icon + " " + selectedDream.fields.template.name}
+                      prompts={selectedDream.fields.prompts}
+                      values={selectedDream.fields.values}
+                    />
+                  )}
+
+                  {(selectedDream.tags.length > 0 || selectedDream.vividness || selectedDream.isLucid || selectedDream.isNightmare) && (
+                    <div className="page-marginalia">
+                      {selectedDream.tags.length > 0 && (
+                        <div className="tag-row">{selectedDream.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
+                      )}
+                      <div className="dream-meta">
+                        {selectedDream.vividness && <span>vividness <b>{selectedDream.vividness}</b>/10</span>}
+                        {selectedDream.isLucid && <span>☾ lucid</span>}
+                        {selectedDream.isNightmare && <span>☁ nightmare</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  <aside className="reflection-card">
+                    <Waypoints size={16} />
+                    <div>
+                      <span className="reflection-label">A gentle reflection</span>
+                      <p>As this book grows, Tardemah notices repeating people, places and feelings — without deciding what your dream must mean.</p>
+                      <div className="reflection-links">
+                        <button onClick={() => setPatternsOpen(true)}>Threads in my dreams →</button>
+                        <a href="/graph">Open the Dream Map →</a>
+                      </div>
+                    </div>
+                  </aside>
+
+                  <footer className="page-foot">
+                    <span className="page-note">
+                      {selectedDream.visibility === "WORKSPACE"
+                        ? <><Users size={13} /> Shared with {me?.workspace.name}</>
+                        : <><Heart size={13} /> Only you can see this page</>}
+                    </span>
+                    <span className="folio">— {dreamNumber} —</span>
+                  </footer>
+                </div>
+              ) : (
+                <div className="blank-page">
+                  <span className="blank-emblem"><Emblem emblem={appearance?.emblem ?? "moon"} size={26} /></span>
+                  <h2>{loading ? "Opening your book…" : "Your book is ready."}</h2>
+                  {!loading && <p>No sample dreams. No pretend memories. This book begins with yours.</p>}
+                  {!loading && canWrite && <button onClick={() => setComposer({})}><BookOpen size={16} /> Write the first page</button>}
+                </div>
+              )}
+
+              {cornerGlyph && <div className="doodle doodle-corner ornament" aria-hidden="true">{cornerGlyph}</div>}
+              {markGlyph && <div className="doodle doodle-mark ornament" aria-hidden="true">{markGlyph}</div>}
+            </article>
+          </div>
         </div>
       </section>
 
+      {contentsOpen && <div className="contents-scrim" onClick={() => setContentsOpen(false)} />}
+
       <nav className="mobile-tabs" aria-label="Primary">
-        <button className="active"><BookHeart size={19} /><span>Journal</span></button>
-        <button onClick={() => setPatternsOpen(true)}><Sparkles size={19} /><span>Patterns</span></button>
-        <button className="mobile-add" onClick={() => setComposerOpen(true)}><Plus size={24} /></button>
-        <button><Search size={19} /><span>Explore</span></button>
-        <button onClick={() => setCustomizeOpen(true)}><Palette size={19} /><span>Me</span></button>
+        <button className={!reading ? "active" : ""} onClick={() => setReading(false)}><BookOpen size={19} /><span>Pages</span></button>
+        <button onClick={() => setPatternsOpen(true)}><Waypoints size={19} /><span>Threads</span></button>
+        {canWrite ? <button className="mobile-add" onClick={() => setComposer({})} aria-label="Write a dream"><Plus size={24} /></button> : <span />}
+        <a href="/graph"><MapIcon size={19} /><span>Map</span></a>
+        <button onClick={() => setStudioOpen(true)} disabled={!me}><Palette size={19} /><span>Design</span></button>
       </nav>
 
-      {composerOpen && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => !saving && setComposerOpen(false)}>
-          <form className="composer paper-modal" onSubmit={saveDream} onMouseDown={(event) => event.stopPropagation()}>
-            <button type="button" className="modal-close" disabled={saving} onClick={() => setComposerOpen(false)}><X size={18} /></button>
-            <p className="eyebrow">New dream page</p><h2>What do you remember?</h2>
-            <p className="modal-intro">Fragments count. You do not have to make it make sense yet.</p>
-            <VoiceCapture onTranscript={(transcript) => setBody((current) => current.trim() ? current.trim() + "\n\n" + transcript : transcript)} />
-            <input className="title-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Give it a little title... (optional)" />
-            <textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} placeholder="I was somewhere..." rows={9} />
-            <div className="mood-picker"><span>I woke up feeling</span><div>
-              {moodOptions.map((option) => <button key={option} type="button" className={mood === option ? "selected" : ""} onClick={() => setMood(option)}>{option}</button>)}
-            </div></div>
-            <button className="save-page" type="submit" disabled={!body.trim() || saving}>{saving ? "Keeping your dream..." : "Keep this dream"} <Heart size={16} /></button>
-          </form>
-        </div>
+      {composer && me && (
+        <Composer
+          me={me}
+          initialTemplateId={composer.templateId}
+          onClose={() => setComposer(null)}
+          onMe={setMe}
+          onSaved={(dream) => {
+            setDreams((current) => [dream, ...current.filter((item) => item.id !== dream.id)]);
+            setSelectedId(dream.id);
+            setFilter("all");
+            setComposer(null);
+          }}
+        />
       )}
 
-      {customizeOpen && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setCustomizeOpen(false)}>
-          <section className="customizer paper-modal" onMouseDown={(event) => event.stopPropagation()}>
-            <button type="button" className="modal-close" onClick={() => setCustomizeOpen(false)}><X size={18} /></button>
-            <p className="eyebrow">Make it yours</p><h2>Choose your journal mood</h2>
-            <p className="modal-intro">Your dreams stay the same. The book around them can feel like you.</p>
-            <div className="theme-grid">{themes.map((option) => (
-              <button key={option.id} className={"theme-card " + (theme === option.id ? "selected" : "")} onClick={() => chooseTheme(option.id)}>
-                <span className={"theme-swatch swatch-" + option.id}><span /></span><strong>{option.name}</strong><small>{option.note}</small>
-              </button>
-            ))}</div>
-            <div className="customizer-note"><Sparkles size={16} /><p>Next: covers, page texture, type styles, stickers, prompt style and journal density.</p></div>
-          </section>
-        </div>
+      {studioOpen && me && <Studio me={me} onChange={setMe} onClose={() => setStudioOpen(false)} />}
+
+      {editingDream && (
+        <DreamEditModal
+          dream={editingDream}
+          sharedBookName={isShared ? me?.workspace.name ?? null : null}
+          onClose={() => setEditingDream(null)}
+          onSaved={replaceDream}
+          onDeleted={removeDream}
+        />
       )}
 
-      {editingDream && <DreamEditModal dream={editingDream} onClose={() => setEditingDream(null)} onSaved={replaceDream} onDeleted={removeDream} />}
-      {patternsOpen && <PatternsModal dreams={dreams} onClose={() => setPatternsOpen(false)} />}
+      {patternsOpen && (
+        <PatternsModal
+          dreams={dreams.filter((dream) => dream.isMine).map((dream) => ({ ...dream, mood: dream.mood ?? "unspoken" }))}
+          onClose={() => setPatternsOpen(false)}
+        />
+      )}
     </main>
   );
 }

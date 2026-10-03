@@ -1,3 +1,7 @@
+export * from "./appearance";
+export * from "./entry-templates";
+export * from "./tenancy";
+
 export type DreamMood =
   | "peaceful"
   | "happy"
@@ -6,6 +10,8 @@ export type DreamMood =
   | "anxious"
   | "strange"
   | string;
+
+export type DreamVisibility = "PRIVATE" | "WORKSPACE";
 
 export type DreamEntry = {
   id: string;
@@ -20,13 +26,6 @@ export type DreamEntry = {
   isLucid: boolean;
   isNightmare: boolean;
   tags: string[];
-};
-
-export type JournalTheme = "lavender" | "rose" | "sage" | "midnight";
-
-export type JournalPreferences = {
-  theme: JournalTheme;
-  displayName?: string;
-  promptStyle: "gentle" | "minimal" | "reflective";
-  pageDensity: "airy" | "balanced" | "compact";
+  visibility: DreamVisibility;
+  templateId?: string | null;
 };

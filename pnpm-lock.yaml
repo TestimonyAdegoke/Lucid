@@ -53,12 +53,15 @@ importers:
 
   apps/web:
     dependencies:
-      '@lucid/database':
-        specifier: workspace:*
-        version: link:../../packages/database
       '@neondatabase/auth':
         specifier: 0.5.0-beta
         version: 0.5.0-beta(fc0507f3ce5d7c48638bbe35459d8e5a)
+      '@tardemah/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@tardemah/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.3)

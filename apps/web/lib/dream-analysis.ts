@@ -1,4 +1,6 @@
-import { db, EntityKind } from "@lucid/database";
+import { db, EntityKind } from "@tardemah/database";
+import { fieldValuesToText } from "@tardemah/domain";
+import type { DreamFields } from "@/lib/dreams";
 import { extractDreamEntities, isOpenAIConfigured, type ExtractedEntity } from "@/lib/openai";
 
 const stopWords = new Set([
@@ -131,14 +133,17 @@ export async function analyzeDreamById(dreamId: string) {
   if (!dream) return;
 
   const tags = dream.dreamTags.map((item) => item.tag.name);
-  let entities = fallbackEntities({ content: dream.content, tags, mood: dream.mood });
-  let model = "lucid-surface-v1";
+  const snapshot = dream.fields as DreamFields | null;
+  const fieldText = snapshot?.prompts ? fieldValuesToText(snapshot.prompts, snapshot.values ?? {}) : "";
+  const content = fieldText ? dream.content + "\n\n" + fieldText : dream.content;
+  let entities = fallbackEntities({ content, tags, mood: dream.mood });
+  let model = "tardemah-surface-v1";
 
   if (isOpenAIConfigured()) {
     try {
       const extracted = await extractDreamEntities({
         title: dream.title,
-        content: dream.content,
+        content,
         mood: dream.mood,
         tags,
       });
@@ -147,7 +152,7 @@ export async function analyzeDreamById(dreamId: string) {
         model = extracted.model;
       }
     } catch (error) {
-      console.error("Lucid AI extraction fell back to surface analysis", error);
+      console.error("Tardemah AI extraction fell back to surface analysis", error);
     }
   }
 
@@ -182,8 +187,10 @@ export async function analyzeDreamById(dreamId: string) {
   });
 
   const others = await db.dream.findMany({
+    // Connections stay within one author's pages so shared books never link to someone else's private dreams.
     where: {
       workspaceId: dream.workspaceId,
+      authorId: dream.authorId,
       id: { not: dream.id },
     },
     include: {
@@ -197,7 +204,7 @@ export async function analyzeDreamById(dreamId: string) {
   const current: SimilarityDream = {
     id: dream.id,
     title: dream.title,
-    content: dream.content,
+    content,
     mood: dream.mood,
     tags,
     entities: entities.map((entity) => entity.normalized),

@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Lucid",
+    "name": "Tardemah",
     "slug": "lucid-dream-journal",
-    "scheme": "lucid",
+    "scheme": "tardemah",
     "version": "0.3.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -11,7 +11,7 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow Lucid to record your dream so it can turn your voice into a private journal page."
+          "microphonePermission": "Allow Tardemah to record your dream so it can turn your voice into a private journal page."
         }
       ]
     ],

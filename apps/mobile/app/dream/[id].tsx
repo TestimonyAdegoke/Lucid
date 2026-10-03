@@ -97,7 +97,7 @@ export default function DreamScreen(){
           {dream.isNightmare&&<Text style={s.memoryPill}>☁ nightmare</Text>}
         </View>
 
-        <View style={s.reflection}><Text style={s.reflectionSpark}>✦</Text><View style={{flex:1}}><Text style={s.reflectionLabel}>A GENTLE REFLECTION</Text><Text style={s.reflectionText}>As your journal grows, Lucid can connect this page to recurring feelings, people, places and details.</Text></View></View>
+        <View style={s.reflection}><Text style={s.reflectionSpark}>✦</Text><View style={{flex:1}}><Text style={s.reflectionLabel}>A GENTLE REFLECTION</Text><Text style={s.reflectionText}>As your journal grows, Tardemah can connect this page to recurring feelings, people, places and details.</Text></View></View>
 
         <View style={s.actions}>
           <Pressable style={s.action} onPress={()=>setEditing(true)}><Text style={s.actionText}>✎ Edit page</Text></Pressable>

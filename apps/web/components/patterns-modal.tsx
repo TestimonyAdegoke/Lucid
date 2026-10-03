@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowUpRight, MoonStar, Sparkles, Star, X } from "lucide-react";
+import { ArrowUpRight, Heart, MoonStar, Waypoints, X } from "lucide-react";
+import { useEscape } from "@/lib/use-escape";
 
 type PatternDream = {
   mood: string;
@@ -19,6 +20,7 @@ function rank(values: string[]) {
 }
 
 export function PatternsModal({ dreams, onClose }: { dreams: PatternDream[]; onClose: () => void }) {
+  useEscape(onClose);
   const moods = rank(dreams.map((dream) => dream.mood));
   const tags = rank(dreams.flatMap((dream) => dream.tags));
   const lucid = dreams.filter((dream) => dream.isLucid).length;
@@ -37,7 +39,7 @@ export function PatternsModal({ dreams, onClose }: { dreams: PatternDream[]; onC
           <div className="patterns-empty">
             <MoonStar size={30} />
             <strong>Your patterns will grow with your pages.</strong>
-            <p>Record a few dreams and Lucid will begin showing recurring feelings and details.</p>
+            <p>Record a few dreams and Tardemah will begin showing recurring feelings and details.</p>
           </div>
         ) : (
           <>
@@ -50,7 +52,7 @@ export function PatternsModal({ dreams, onClose }: { dreams: PatternDream[]; onC
 
             <div className="pattern-columns">
               <section>
-                <span className="pattern-kicker"><Sparkles size={13} /> Feelings that return</span>
+                <span className="pattern-kicker"><Heart size={13} /> Feelings that return</span>
                 <div className="pattern-bars">
                   {moods.map(([name, count]) => (
                     <div key={name} className="pattern-row">
@@ -63,7 +65,7 @@ export function PatternsModal({ dreams, onClose }: { dreams: PatternDream[]; onC
               </section>
 
               <section>
-                <span className="pattern-kicker"><Star size={13} /> Details that repeat</span>
+                <span className="pattern-kicker"><Waypoints size={13} /> Details that repeat</span>
                 {tags.length ? (
                   <div className="pattern-tags">
                     {tags.map(([name, count]) => <span key={name}>#{name} <small>{count}</small></span>)}

@@ -1,7 +1,7 @@
 import { createNeonAuth } from "@neondatabase/auth/next/server";
 
 const fallbackBaseUrl = "https://auth-not-configured.invalid";
-const fallbackSecret = "lucid-development-cookie-secret-change-me-123456789";
+const fallbackSecret = "tardemah-development-cookie-secret-change-me-12345";
 
 export function isAuthConfigured() {
   return Boolean(

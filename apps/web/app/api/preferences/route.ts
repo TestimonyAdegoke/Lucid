@@ -1,59 +1,65 @@
-import { db } from "@lucid/database";
+import { db } from "@tardemah/database";
+import { sanitizeAppearance, systemEntryTemplates } from "@tardemah/domain";
 import { NextResponse } from "next/server";
+import { ApiError, readJson, route, text } from "@/lib/api";
+import { appearanceWrites, loadPreferences, serializePreferences } from "@/lib/preferences";
 import { getRequestContext } from "@/lib/session";
+import { findEntryTemplate, listJournalStyles } from "@/lib/templates";
 
 export const runtime = "nodejs";
 
-const allowedThemes = new Set(["lavender", "rose", "sage", "midnight"]);
-const allowedPromptStyles = new Set(["gentle", "minimal", "reflective"]);
-const allowedDensities = new Set(["airy", "balanced", "compact"]);
-
-export async function GET(request: Request) {
+export const GET = route("load preferences", async (request: Request) => {
   const context = await getRequestContext(request);
+  return NextResponse.json({ preferences: await loadPreferences(context) });
+});
 
-  const preferences = await db.journalPreference.upsert({
-    where: {
-      userId_workspaceId: {
-        userId: context.userId,
-        workspaceId: context.workspaceId,
-      },
-    },
-    update: {},
-    create: {
-      userId: context.userId,
-      workspaceId: context.workspaceId,
-    },
+/**
+ * Updates the caller's look for the active dream book. Accepts individual appearance fields,
+ * and/or `styleKey` to apply a whole style template (built-in or saved in this workspace).
+ */
+export const PATCH = route("update preferences", async (request: Request) => {
+  const context = await getRequestContext(request);
+  const body = await readJson(request);
+
+  let appearance = sanitizeAppearance(body.appearance ?? body);
+  let styleKey: string | undefined;
+  let replaceDesign = false;
+
+  if (typeof body.styleKey === "string") {
+    const style = (await listJournalStyles(context.workspaceId)).find((item) => item.key === body.styleKey);
+    if (!style) throw new ApiError(404, "That journal style is not available in this dream book.");
+    appearance = { ...style.appearance, ...appearance };
+    styleKey = style.key;
+    replaceDesign = true;
+  } else if (Object.keys(appearance).length) {
+    styleKey = "custom";
+  }
+
+  let defaultEntryTemplate: string | undefined;
+  if (typeof body.defaultEntryTemplate === "string") {
+    const template = await findEntryTemplate(context.workspaceId, body.defaultEntryTemplate);
+    defaultEntryTemplate = template?.id ?? systemEntryTemplates[0].id;
+  }
+
+  const displayName = body.displayName === null ? null : text(body.displayName, 60);
+
+  const current = await db.journalPreference.findUnique({
+    where: { userId_workspaceId: { userId: context.userId, workspaceId: context.workspaceId } },
+    select: { design: true },
   });
-
-  return NextResponse.json({ preferences });
-}
-
-export async function PATCH(request: Request) {
-  const context = await getRequestContext(request);
-  const body = await request.json();
 
   const data = {
-    theme: allowedThemes.has(body.theme) ? body.theme : undefined,
-    cover: typeof body.cover === "string" ? body.cover.slice(0, 60) : undefined,
-    typography: typeof body.typography === "string" ? body.typography.slice(0, 60) : undefined,
-    promptStyle: allowedPromptStyles.has(body.promptStyle) ? body.promptStyle : undefined,
-    pageDensity: allowedDensities.has(body.pageDensity) ? body.pageDensity : undefined,
+    ...appearanceWrites(appearance, current?.design ?? {}, replaceDesign),
+    styleKey,
+    defaultEntryTemplate,
+    displayName: displayName === "" ? null : displayName,
   };
 
-  const preferences = await db.journalPreference.upsert({
-    where: {
-      userId_workspaceId: {
-        userId: context.userId,
-        workspaceId: context.workspaceId,
-      },
-    },
+  const row = await db.journalPreference.upsert({
+    where: { userId_workspaceId: { userId: context.userId, workspaceId: context.workspaceId } },
     update: data,
-    create: {
-      userId: context.userId,
-      workspaceId: context.workspaceId,
-      ...data,
-    },
+    create: { userId: context.userId, workspaceId: context.workspaceId, ...data },
   });
 
-  return NextResponse.json({ preferences });
-}
+  return NextResponse.json({ preferences: serializePreferences(row) });
+});

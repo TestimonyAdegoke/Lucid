@@ -26,7 +26,7 @@ export default function NewDreamScreen(){
       setPendingVoiceUri(null);
     }catch(error){
       setPendingVoiceUri(uri);
-      Alert.alert("Your recording is still here",error instanceof Error?error.message:"Lucid could not transcribe it yet. You can retry.");
+      Alert.alert("Your recording is still here",error instanceof Error?error.message:"Tardemah could not transcribe it yet. You can retry.");
     }finally{
       setTranscribing(false);
     }
@@ -36,14 +36,14 @@ export default function NewDreamScreen(){
     try{
       const permission=await AudioModule.requestRecordingPermissionsAsync();
       if(!permission.granted){
-        Alert.alert("Microphone permission is needed","Lucid can only hear a dream after you allow microphone access.");
+        Alert.alert("Microphone permission is needed","Tardemah can only hear a dream after you allow microphone access.");
         return;
       }
       await setAudioModeAsync({playsInSilentMode:true,allowsRecording:true});
       await recorder.prepareToRecordAsync();
       recorder.record();
     }catch{
-      Alert.alert("Lucid couldn't start listening","You can still type the dream normally.");
+      Alert.alert("Tardemah couldn't start listening","You can still type the dream normally.");
     }
   }
 
@@ -53,7 +53,7 @@ export default function NewDreamScreen(){
       const uri=recorder.uri;
       if(uri) await transcribe(uri);
     }catch{
-      Alert.alert("Lucid couldn't finish that recording","Please try recording the dream again.");
+      Alert.alert("Tardemah couldn't finish that recording","Please try recording the dream again.");
     }
   }
 
@@ -70,7 +70,7 @@ export default function NewDreamScreen(){
       await createDream({title,body,mood});
       router.back();
     } catch {
-      Alert.alert("Lucid couldn't keep this dream","Please try again.");
+      Alert.alert("Tardemah couldn't keep this dream","Please try again.");
     } finally {
       setSaving(false);
     }

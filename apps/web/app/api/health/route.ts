@@ -1,4 +1,4 @@
-import { db } from "@lucid/database";
+import { db } from "@tardemah/database";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";

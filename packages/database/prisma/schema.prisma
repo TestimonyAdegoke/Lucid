@@ -37,6 +37,17 @@ enum InsightLens {
   FREEFORM
 }
 
+enum WorkspacePlan {
+  FREE
+  PLUS
+  STUDIO
+}
+
+enum DreamVisibility {
+  PRIVATE
+  WORKSPACE
+}
+
 enum DreamSource {
   WEB
   MOBILE
@@ -44,17 +55,20 @@ enum DreamSource {
 }
 
 model User {
-  id          String              @id @default(cuid())
-  authUserId  String?             @unique
-  email       String?             @unique
-  name        String?
-  image       String?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  memberships Membership[]
-  dreams      Dream[]             @relation("DreamAuthor")
-  preferences JournalPreference[]
-  sessions    DeviceSession[]
+  id              String              @id @default(cuid())
+  authUserId      String?             @unique
+  email           String?             @unique
+  name            String?
+  image           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  memberships     Membership[]
+  dreams          Dream[]             @relation("DreamAuthor")
+  preferences     JournalPreference[]
+  sessions        DeviceSession[]
+  invitationsSent Invitation[]        @relation("InvitationSender")
+  entryTemplates  EntryTemplate[]
+  journalStyles   JournalStyle[]
 }
 
 model DeviceSession {
@@ -70,16 +84,87 @@ model DeviceSession {
 }
 
 model Workspace {
-  id          String              @id @default(cuid())
+  id             String              @id @default(cuid())
+  name           String
+  slug           String?             @unique
+  description    String?
+  emoji          String?
+  kind           WorkspaceKind       @default(PERSONAL)
+  plan           WorkspacePlan       @default(FREE)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  memberships    Membership[]
+  dreams         Dream[]
+  tags           Tag[]
+  preferences    JournalPreference[]
+  connections    DreamConnection[]
+  invitations    Invitation[]
+  entryTemplates EntryTemplate[]
+  journalStyles  JournalStyle[]
+  usage          UsageCounter[]
+}
+
+model Invitation {
+  id          String         @id @default(cuid())
+  workspaceId String
+  email       String?
+  role        MembershipRole @default(MEMBER)
+  tokenHash   String         @unique
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime       @default(now())
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User           @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model EntryTemplate {
+  id          String    @id @default(cuid())
+  workspaceId String
+  createdById String
   name        String
-  kind        WorkspaceKind       @default(PERSONAL)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  memberships Membership[]
+  description String    @default("")
+  icon        String    @default("✎")
+  prompts     Json      @default("[]")
+  defaults    Json      @default("{}")
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
   dreams      Dream[]
-  tags        Tag[]
-  preferences JournalPreference[]
-  connections DreamConnection[]
+
+  @@index([workspaceId])
+}
+
+model JournalStyle {
+  id          String    @id @default(cuid())
+  workspaceId String
+  createdById String
+  name        String
+  description String    @default("")
+  appearance  Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model UsageCounter {
+  id          String    @id @default(cuid())
+  workspaceId String
+  metric      String
+  period      String
+  count       Int       @default(0)
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, metric, period])
 }
 
 model Membership {
@@ -96,47 +181,61 @@ model Membership {
 }
 
 model JournalPreference {
-  id          String    @id @default(cuid())
-  userId      String
-  workspaceId String
-  theme       String    @default("lavender")
-  cover       String    @default("classic")
-  typography  String    @default("storybook")
-  promptStyle String    @default("gentle")
-  pageDensity String    @default("airy")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                   String    @id @default(cuid())
+  userId               String
+  workspaceId          String
+  theme                String    @default("lavender")
+  cover                String    @default("classic")
+  typography           String    @default("storybook")
+  promptStyle          String    @default("gentle")
+  pageDensity          String    @default("airy")
+  paper                String    @default("lined")
+  accentColor          String?
+  showOrnaments        Boolean   @default(true)
+  styleKey             String    @default("lavender-dusk")
+  defaultEntryTemplate String    @default("sys:quick")
+  displayName          String?
+  /// Free-form design choices beyond the classic columns (colours, fonts, layout…), validated by @tardemah/domain.
+  design               Json      @default("{}")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, workspaceId])
 }
 
 model Dream {
-  id              String            @id @default(cuid())
-  clientId        String?           @unique
-  workspaceId     String
-  authorId        String
-  title           String
-  content         String
-  dreamedAt       DateTime
-  mood            String?
-  vividness       Int?
-  sleepQuality    Int?
-  isLucid         Boolean           @default(false)
-  isNightmare     Boolean           @default(false)
-  isFavorite      Boolean           @default(false)
-  source          DreamSource       @default(WEB)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  workspace       Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  author          User              @relation("DreamAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  dreamTags       DreamTag[]
-  entities        DreamEntity[]
-  insights        DreamInsight[]
-  connectionsFrom DreamConnection[] @relation("DreamConnectionFrom")
-  connectionsTo   DreamConnection[] @relation("DreamConnectionTo")
+  id               String            @id @default(cuid())
+  clientId         String?
+  workspaceId      String
+  authorId         String
+  title            String
+  content          String
+  dreamedAt        DateTime
+  mood             String?
+  vividness        Int?
+  sleepQuality     Int?
+  isLucid          Boolean           @default(false)
+  isNightmare      Boolean           @default(false)
+  isFavorite       Boolean           @default(false)
+  visibility       DreamVisibility   @default(PRIVATE)
+  templateKey      String?
+  customTemplateId String?
+  fields           Json?
+  source           DreamSource       @default(WEB)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author           User              @relation("DreamAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  customTemplate   EntryTemplate?    @relation(fields: [customTemplateId], references: [id], onDelete: SetNull)
+  dreamTags        DreamTag[]
+  entities         DreamEntity[]
+  insights         DreamInsight[]
+  connectionsFrom  DreamConnection[] @relation("DreamConnectionFrom")
+  connectionsTo    DreamConnection[] @relation("DreamConnectionTo")
 
+  @@unique([authorId, clientId])
   @@index([workspaceId, dreamedAt])
   @@index([authorId])
 }
@@ -155,8 +254,8 @@ model Tag {
 model DreamTag {
   dreamId String
   tagId   String
-  dream   Dream @relation(fields: [dreamId], references: [id], onDelete: Cascade)
-  tag     Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  dream   Dream  @relation(fields: [dreamId], references: [id], onDelete: Cascade)
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([dreamId, tagId])
   @@index([tagId])

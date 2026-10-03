@@ -11,3 +11,7 @@ coverage
 *.log
 apps/mobile/.expo
 packages/database/prisma/*.db
+*.tsbuildinfo
+.claude
+apps/web/AGENTS.md
+apps/web/CLAUDE.md

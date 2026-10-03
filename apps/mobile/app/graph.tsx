@@ -32,12 +32,12 @@ export default function DreamGraphScreen(){
   },[data]);
 
   return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.content}>
-    <View style={s.top}><Pressable style={s.back} onPress={()=>router.back()}><Text style={s.backText}>‹</Text></Pressable><Text style={s.wordmark}>lucid</Text><Pressable onPress={load}><Text style={s.refresh}>↻</Text></Pressable></View>
+    <View style={s.top}><Pressable style={s.back} onPress={()=>router.back()}><Text style={s.backText}>‹</Text></Pressable><Text style={s.wordmark}>tardemah</Text><Pressable onPress={load}><Text style={s.refresh}>↻</Text></Pressable></View>
     <Text style={s.eyebrow}>MY DREAM MAP</Text>
     <Text style={s.title}>The little world behind my pages.</Text>
     <Text style={s.intro}>A mobile constellation of the people, places, objects and themes that return. Similarity is descriptive, never a declaration of meaning.</Text>
 
-    {loading?<Text style={s.loading}>connecting the dots…</Text>:!data?<Text style={s.loading}>Lucid couldn't open the map right now.</Text>:<>
+    {loading?<Text style={s.loading}>connecting the dots…</Text>:!data?<Text style={s.loading}>Tardemah couldn't open the map right now.</Text>:<>
       <Text style={s.section}>BRIGHTEST CONSTELLATIONS</Text>
       <View style={s.constellations}>
         {data.entities.slice(0,12).map((entity,index)=><View key={entity.id} style={[s.entity,index%3===0&&s.entityLarge]}>

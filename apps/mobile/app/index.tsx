@@ -34,7 +34,7 @@ export default function HomeScreen() {
       <View style={styles.glow} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <View style={styles.brandRow}><View style={styles.moon}><Text style={styles.moonText}>☾</Text></View><Text style={styles.brand}>lucid</Text></View>
+          <View style={styles.brandRow}><View style={styles.moon}><Text style={styles.moonText}>☾</Text></View><Text style={styles.brand}>tardemah</Text></View>
           <View style={styles.headerRight}>
             <Text style={styles.syncText}>{syncing ? "syncing…" : dreams.some((item) => item.syncStatus !== "synced") ? "saved offline" : "synced"}</Text>
             <Pressable style={styles.avatar}><Text style={styles.avatarText}>T</Text></Pressable>

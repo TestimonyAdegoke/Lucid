@@ -17,6 +17,7 @@ export type MobileDream = {
   syncStatus: SyncStatus;
 };
 
+// Storage key predates the rename to Tardemah; kept so offline dreams on existing installs are not lost.
 const DREAMS_KEY = "lucid.mobile.dreams";
 
 function normalizeDream(input: Partial<MobileDream> & { id?: string }): MobileDream | null {

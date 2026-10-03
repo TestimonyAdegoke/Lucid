@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 
+// Storage key predates the rename to Tardemah; kept so existing installs keep their device session.
 const SESSION_KEY = "lucid.mobile.session";
 
 export type ApiDream = {
@@ -62,12 +63,12 @@ async function mobileHeaders(includeJson = true) {
   return {
     Accept: "application/json",
     ...(includeJson ? { "Content-Type": "application/json" } : {}),
-    "x-lucid-client": "mobile",
-    "x-lucid-session": token,
+    "x-tardemah-client": "mobile",
+    "x-tardemah-session": token,
   };
 }
 
-async function lucidFetch(path: string, init?: RequestInit) {
+async function apiFetch(path: string, init?: RequestInit) {
   return fetch(apiBaseUrl() + path, {
     ...init,
     headers: {
@@ -78,7 +79,7 @@ async function lucidFetch(path: string, init?: RequestInit) {
 }
 
 export async function fetchRemoteDreams() {
-  const response = await lucidFetch("/api/dreams");
+  const response = await apiFetch("/api/dreams");
   if (!response.ok) throw new Error("Unable to sync dreams.");
   const payload = (await response.json()) as { dreams: ApiDream[] };
   return payload.dreams;
@@ -96,7 +97,7 @@ export async function createRemoteDream(input: {
   isNightmare?: boolean;
   isFavorite?: boolean;
 }) {
-  const response = await lucidFetch("/api/dreams", {
+  const response = await apiFetch("/api/dreams", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -116,7 +117,7 @@ export async function updateRemoteDream(id: string, input: Partial<{
   isNightmare: boolean;
   isFavorite: boolean;
 }>) {
-  const response = await lucidFetch("/api/dreams/" + encodeURIComponent(id), {
+  const response = await apiFetch("/api/dreams/" + encodeURIComponent(id), {
     method: "PATCH",
     body: JSON.stringify(input),
   });
@@ -126,7 +127,7 @@ export async function updateRemoteDream(id: string, input: Partial<{
 }
 
 export async function deleteRemoteDream(id: string) {
-  const response = await lucidFetch("/api/dreams/" + encodeURIComponent(id), { method: "DELETE" });
+  const response = await apiFetch("/api/dreams/" + encodeURIComponent(id), { method: "DELETE" });
   if (!response.ok) throw new Error("Unable to delete dream remotely.");
 }
 
@@ -149,14 +150,14 @@ export async function transcribeRemoteAudio(uri: string) {
 
   const payload = await response.json().catch(() => ({})) as { transcript?: string; error?: string };
   if (!response.ok || !payload.transcript) {
-    throw new Error(payload.error || "Lucid could not transcribe that recording.");
+    throw new Error(payload.error || "Tardemah could not transcribe that recording.");
   }
 
   return payload.transcript;
 }
 
 export async function fetchDreamGraph() {
-  const response = await lucidFetch("/api/graph");
+  const response = await apiFetch("/api/graph");
   if (!response.ok) throw new Error("Unable to open your Dream Map.");
   return await response.json() as DreamGraphData;
 }

@@ -20,7 +20,7 @@ export default function PatternsScreen(){
   const tags=useMemo(()=>rank(dreams.flatMap(d=>d.tags)),[dreams]);
 
   return <SafeAreaView style={s.safe}><ScrollView contentContainerStyle={s.content}>
-    <View style={s.top}><Pressable style={s.back} onPress={()=>router.back()}><Text style={s.backText}>‹</Text></Pressable><Text style={s.wordmark}>lucid</Text><View style={{width:36}}/></View>
+    <View style={s.top}><Pressable style={s.back} onPress={()=>router.back()}><Text style={s.backText}>‹</Text></Pressable><Text style={s.wordmark}>tardemah</Text><View style={{width:36}}/></View>
     <Text style={s.eyebrow}>THREADS IN MY DREAM BOOK</Text>
     <Text style={s.title}>Patterns, gently noticed.</Text>
     <Text style={s.intro}>These are simple patterns from your own pages, not declarations about what your dreams mean.</Text>\n\n    <Pressable style={s.mapButton} onPress={()=>router.push("/graph")}><Text style={s.mapSpark}>✦</Text><View style={{flex:1}}><Text style={s.mapTitle}>Open my Dream Map</Text><Text style={s.mapNote}>See recurring details and dreams that echo each other</Text></View><Text style={s.mapArrow}>›</Text></Pressable>

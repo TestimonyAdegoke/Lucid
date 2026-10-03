@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Heart, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, Compass, Heart, RefreshCw, Waypoints } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 type DreamNode = {
@@ -45,13 +45,17 @@ export function DreamGraphView() {
   const [data, setData] = useState<GraphData | null>(null);
   const [selected, setSelected] = useState<{ type: "dream" | "entity"; id: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
+    setError(null);
     try {
       const response = await fetch("/api/graph", { cache: "no-store" });
       if (!response.ok) throw new Error("graph");
       setData(await response.json());
+    } catch {
+      setError("The Dream Map could not be drawn just now.");
     } finally {
       setLoading(false);
     }
@@ -89,7 +93,7 @@ export function DreamGraphView() {
   return (
     <main className="dream-map-page">
       <header className="dream-map-header">
-        <a href="/"><ArrowLeft size={15} /> My dream book</a>
+        <a href="/journal"><ArrowLeft size={15} /> My dream book</a>
         <button onClick={() => void load()} disabled={loading}><RefreshCw size={14} className={loading ? "voice-spinner" : ""} /> Refresh map</button>
       </header>
 
@@ -99,8 +103,10 @@ export function DreamGraphView() {
         <p>Dreams sit around the outside. People, places, objects and recurring details gather inside. Lines show shared surface details and similarity—not a declaration of meaning.</p>
       </section>
 
+      {error && <div className="editor-error" role="alert">{error}</div>}
+
       {!data?.dreams.length && !loading ? (
-        <section className="dream-map-empty"><Sparkles size={30} /><h2>Your constellation begins with a dream.</h2><a href="/">Write a page first</a></section>
+        <section className="dream-map-empty"><Compass size={30} /><h2>Your constellation begins with a dream.</h2><a href="/journal">Write a page first</a></section>
       ) : (
         <section className="dream-map-book">
           <div className="dream-map-canvas">
@@ -158,9 +164,9 @@ export function DreamGraphView() {
           <aside className="dream-map-note">
             {!selectedDream && !selectedEntity && (
               <>
-                <Sparkles size={19} />
+                <Compass size={19} />
                 <h2>Touch a point.</h2>
-                <p>Lucid will show why that dream or detail appears in this map.</p>
+                <p>Tardemah will show why that dream or detail appears in this map.</p>
               </>
             )}
 

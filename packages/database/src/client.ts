@@ -1,24 +1,26 @@
 import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
-  lucidPrisma?: PrismaClient;
+  tardemahPrisma?: PrismaClient;
 };
 
 export const db =
-  globalForPrisma.lucidPrisma ??
+  globalForPrisma.tardemahPrisma ??
   new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.lucidPrisma = db;
+  globalForPrisma.tardemahPrisma = db;
 }
 
-export type { Prisma } from "@prisma/client";
+export { Prisma } from "@prisma/client";
 export {
   DreamSource,
+  DreamVisibility,
   EntityKind,
   InsightLens,
   MembershipRole,
   WorkspaceKind,
+  WorkspacePlan,
 } from "@prisma/client";

@@ -1,4 +1,4 @@
-name: Lucid CI
+name: Tardemah CI
 
 on:
   push:
@@ -9,10 +9,10 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: postgresql://lucid:lucid@localhost:5432/lucid
-      DATABASE_URL_UNPOOLED: postgresql://lucid:lucid@localhost:5432/lucid
+      DATABASE_URL: postgresql://tardemah:tardemah@localhost:5432/tardemah
+      DATABASE_URL_UNPOOLED: postgresql://tardemah:tardemah@localhost:5432/tardemah
       NEON_AUTH_BASE_URL: https://auth-ci.invalid
-      NEON_AUTH_COOKIE_SECRET: lucid-ci-cookie-secret-at-least-32-characters-long
+      NEON_AUTH_COOKIE_SECRET: tardemah-ci-cookie-secret-at-least-32-characters-long
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,7 +35,10 @@ jobs:
         run: pnpm db:validate
 
       - name: Type-check mobile
-        run: pnpm --filter @lucid/mobile exec tsc --noEmit
+        run: pnpm --filter @tardemah/mobile exec tsc --noEmit
+
+      - name: Type-check web
+        run: pnpm --filter @tardemah/web exec tsc --noEmit
 
       - name: Build web
         run: pnpm build:web
