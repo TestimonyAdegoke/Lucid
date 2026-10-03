@@ -1,0 +1,12 @@
+{
+  "name": "lucid",
+  "private": true,
+  "packageManager": "pnpm@10.17.0",
+  "scripts": {
+    "dev:web": "pnpm --filter @lucid/web dev",
+    "dev:mobile": "pnpm --filter @lucid/mobile start",
+    "build:web": "pnpm --filter @lucid/web build",
+    "db:generate": "pnpm --filter @lucid/database prisma generate",
+    "db:push": "pnpm --filter @lucid/database prisma db push"
+  }
+}

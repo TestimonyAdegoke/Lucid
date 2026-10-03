@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Lucid",
+    "slug": "lucid-dream-journal",
+    "scheme": "lucid",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lucid.dreamjournal"
+    },
+    "android": {
+      "package": "com.lucid.dreamjournal"
+    }
+  }
+}

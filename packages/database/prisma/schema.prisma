@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceKind { PERSONAL PROFESSIONAL }
+enum MembershipRole { OWNER ADMIN MEMBER VIEWER }
+enum EntityKind { PERSON PLACE OBJECT SYMBOL THEME }
+enum InsightLens { PERSONAL_PATTERN PSYCHOLOGICAL SYMBOLIC SPIRITUAL BIBLICAL FREEFORM }
+
+model User {
+  id          String              @id @default(cuid())
+  email       String              @unique
+  name        String?
+  image       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  memberships Membership[]
+  dreams      Dream[]             @relation("DreamAuthor")
+  preferences JournalPreference[]
+}
+
+model Workspace {
+  id          String              @id @default(cuid())
+  name        String
+  kind        WorkspaceKind       @default(PERSONAL)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  memberships Membership[]
+  dreams      Dream[]
+  tags        Tag[]
+  preferences JournalPreference[]
+}
+
+model Membership {
+  id          String         @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        MembershipRole @default(MEMBER)
+  createdAt   DateTime       @default(now())
+  user        User           @relation(fields:[userId],references:[id],onDelete:Cascade)
+  workspace   Workspace      @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+
+  @@unique([userId,workspaceId])
+  @@index([workspaceId])
+}
+
+model JournalPreference {
+  id          String    @id @default(cuid())
+  userId      String
+  workspaceId String
+  theme       String    @default("lavender")
+  cover       String    @default("classic")
+  typography  String    @default("storybook")
+  promptStyle String    @default("gentle")
+  pageDensity String    @default("airy")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields:[userId],references:[id],onDelete:Cascade)
+  workspace   Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+
+  @@unique([userId,workspaceId])
+}
+
+model Dream {
+  id           String         @id @default(cuid())
+  workspaceId  String
+  authorId     String
+  title        String
+  content      String
+  dreamedAt    DateTime
+  mood         String?
+  vividness    Int?
+  sleepQuality Int?
+  isLucid      Boolean        @default(false)
+  isNightmare  Boolean        @default(false)
+  isFavorite   Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  workspace    Workspace      @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  author       User           @relation("DreamAuthor",fields:[authorId],references:[id],onDelete:Cascade)
+  tags         Tag[]          @relation("DreamTags")
+  entities     DreamEntity[]
+  insights     DreamInsight[]
+
+  @@index([workspaceId,dreamedAt])
+  @@index([authorId])
+}
+
+model Tag {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields:[workspaceId],references:[id],onDelete:Cascade)
+  dreams      Dream[]   @relation("DreamTags")
+
+  @@unique([workspaceId,name])
+}
+
+model DreamEntity {
+  id         String     @id @default(cuid())
+  dreamId    String
+  kind       EntityKind
+  label      String
+  normalized String?
+  confidence Float?
+  dream      Dream      @relation(fields:[dreamId],references:[id],onDelete:Cascade)
+
+  @@index([dreamId,kind])
+  @@index([normalized])
+}
+
+model DreamInsight {
+  id        String      @id @default(cuid())
+  dreamId   String
+  lens      InsightLens
+  content   String
+  model     String?
+  createdAt DateTime    @default(now())
+  dream     Dream       @relation(fields:[dreamId],references:[id],onDelete:Cascade)
+
+  @@index([dreamId,lens])
+}
