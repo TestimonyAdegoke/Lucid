@@ -11,6 +11,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://lucid:lucid@localhost:5432/lucid
       DATABASE_URL_UNPOOLED: postgresql://lucid:lucid@localhost:5432/lucid
+      NEON_AUTH_BASE_URL: https://auth-ci.invalid
+      NEON_AUTH_COOKIE_SECRET: lucid-ci-cookie-secret-at-least-32-characters-long
     steps:
       - name: Checkout
         uses: actions/checkout@v4

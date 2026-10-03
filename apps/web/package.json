@@ -1,6 +1,6 @@
 {
   "name": "@lucid/web",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@lucid/database": "workspace:*",
+    "@neondatabase/auth": "0.5.0-beta",
     "lucide-react": "^0.468.0",
     "next": "16.3.8",
     "react": "19.2.3",

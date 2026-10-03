@@ -45,6 +45,7 @@ enum DreamSource {
 
 model User {
   id          String              @id @default(cuid())
+  authUserId  String?             @unique
   email       String?             @unique
   name        String?
   image       String?

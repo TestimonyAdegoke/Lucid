@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./features.css";
+import "./auth.css";
 
 export const metadata: Metadata = {
   title: "Lucid — Your dream journal",
