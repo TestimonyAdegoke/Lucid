@@ -79,6 +79,7 @@ model Workspace {
   dreams      Dream[]
   tags        Tag[]
   preferences JournalPreference[]
+  connections DreamConnection[]
 }
 
 model Membership {
@@ -112,27 +113,29 @@ model JournalPreference {
 }
 
 model Dream {
-  id           String         @id @default(cuid())
-  clientId     String?        @unique
-  workspaceId  String
-  authorId     String
-  title        String
-  content      String
-  dreamedAt    DateTime
-  mood         String?
-  vividness    Int?
-  sleepQuality Int?
-  isLucid      Boolean        @default(false)
-  isNightmare  Boolean        @default(false)
-  isFavorite   Boolean        @default(false)
-  source       DreamSource    @default(WEB)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  author       User           @relation("DreamAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  dreamTags    DreamTag[]
-  entities     DreamEntity[]
-  insights     DreamInsight[]
+  id              String            @id @default(cuid())
+  clientId        String?           @unique
+  workspaceId     String
+  authorId        String
+  title           String
+  content         String
+  dreamedAt       DateTime
+  mood            String?
+  vividness       Int?
+  sleepQuality    Int?
+  isLucid         Boolean           @default(false)
+  isNightmare     Boolean           @default(false)
+  isFavorite      Boolean           @default(false)
+  source          DreamSource       @default(WEB)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  workspace       Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  author          User              @relation("DreamAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  dreamTags       DreamTag[]
+  entities        DreamEntity[]
+  insights        DreamInsight[]
+  connectionsFrom DreamConnection[] @relation("DreamConnectionFrom")
+  connectionsTo   DreamConnection[] @relation("DreamConnectionTo")
 
   @@index([workspaceId, dreamedAt])
   @@index([authorId])
@@ -182,4 +185,23 @@ model DreamInsight {
   dream     Dream       @relation(fields: [dreamId], references: [id], onDelete: Cascade)
 
   @@index([dreamId, lens])
+}
+
+model DreamConnection {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  fromDreamId    String
+  toDreamId      String
+  score          Float
+  sharedEntities Json      @default("[]")
+  sharedTags     Json      @default("[]")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fromDream      Dream     @relation("DreamConnectionFrom", fields: [fromDreamId], references: [id], onDelete: Cascade)
+  toDream        Dream     @relation("DreamConnectionTo", fields: [toDreamId], references: [id], onDelete: Cascade)
+
+  @@unique([fromDreamId, toDreamId])
+  @@index([workspaceId, score])
+  @@index([toDreamId])
 }

@@ -1,6 +1,7 @@
 import { db } from "@lucid/database";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { cleanTags, serializeDream } from "@/lib/dreams";
+import { analyzeDreamById } from "@/lib/dream-analysis";
 import { getRequestContext } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -104,6 +105,22 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       },
       include: dreamInclude,
     });
+
+    const shouldReanalyze =
+      body.title !== undefined ||
+      body.content !== undefined ||
+      body.mood !== undefined ||
+      body.tags !== undefined;
+
+    if (shouldReanalyze) {
+      after(async () => {
+        try {
+          await analyzeDreamById(dream.id);
+        } catch (error) {
+          console.error("Post-edit dream analysis failed", error);
+        }
+      });
+    }
 
     return NextResponse.json({ dream: serializeDream(dream) });
   } catch (error) {

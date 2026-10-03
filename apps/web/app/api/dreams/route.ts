@@ -1,6 +1,7 @@
 import { db, DreamSource } from "@lucid/database";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { cleanTags, serializeDream } from "@/lib/dreams";
+import { analyzeDreamById } from "@/lib/dream-analysis";
 import { getRequestContext } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -112,6 +113,14 @@ export async function POST(request: Request) {
           : undefined,
       },
       include: dreamInclude,
+    });
+
+    after(async () => {
+      try {
+        await analyzeDreamById(dream.id);
+      } catch (error) {
+        console.error("Post-save dream analysis failed", error);
+      }
     });
 
     return NextResponse.json({ dream: serializeDream(dream) }, { status: 201 });
