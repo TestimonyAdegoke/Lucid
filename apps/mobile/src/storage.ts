@@ -2,46 +2,35 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type MobileDream = {
   id: string;
+  clientId: string;
   title: string;
   body: string;
-  date: string;
+  dreamedAt: string;
   mood: string;
+  syncStatus: "synced" | "pending";
 };
 
-const KEY = "lucid.mobile.dreams";
+const DREAMS_KEY = "lucid.mobile.dreams";
 
-export const starterDreams: MobileDream[] = [
-  {
-    id: "moonlit-train",
-    title: "The moonlit train",
-    body: "Every window showed a different season. I remember feeling strangely peaceful.",
-    date: "Oct 3",
-    mood: "peaceful",
-  },
-  {
-    id: "blue-house",
-    title: "The little blue house",
-    body: "Someone had left the porch light on for me.",
-    date: "Sep 29",
-    mood: "nostalgic",
-  },
-];
-
-export async function getDreams() {
-  const raw = await AsyncStorage.getItem(KEY);
-  if (!raw) return starterDreams;
+export async function loadCachedDreams(): Promise<MobileDream[]> {
+  const raw = await AsyncStorage.getItem(DREAMS_KEY);
+  if (!raw) return [];
 
   try {
     const parsed = JSON.parse(raw) as MobileDream[];
-    return Array.isArray(parsed) ? parsed : starterDreams;
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return starterDreams;
+    return [];
   }
 }
 
-export async function saveDream(dream: MobileDream) {
-  const current = await getDreams();
-  const next = [dream, ...current];
-  await AsyncStorage.setItem(KEY, JSON.stringify(next));
+export async function saveCachedDreams(dreams: MobileDream[]) {
+  await AsyncStorage.setItem(DREAMS_KEY, JSON.stringify(dreams));
+}
+
+export async function upsertCachedDream(dream: MobileDream) {
+  const current = await loadCachedDreams();
+  const next = [dream, ...current.filter((item) => item.clientId !== dream.clientId)];
+  await saveCachedDreams(next);
   return next;
 }

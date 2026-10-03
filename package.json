@@ -7,6 +7,9 @@
     "dev:mobile": "pnpm --filter @lucid/mobile start",
     "build:web": "pnpm --filter @lucid/web build",
     "db:generate": "pnpm --filter @lucid/database prisma generate",
-    "db:push": "pnpm --filter @lucid/database prisma db push"
+    "db:validate": "pnpm --filter @lucid/database prisma validate",
+    "db:push": "pnpm --filter @lucid/database prisma db push",
+    "db:migrate": "pnpm --filter @lucid/database prisma migrate deploy",
+    "db:studio": "pnpm --filter @lucid/database prisma studio"
   }
 }

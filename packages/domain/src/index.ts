@@ -1,7 +1,15 @@
-export type DreamMood = "peaceful" | "happy" | "curious" | "nostalgic" | "anxious" | "strange" | string;
+export type DreamMood =
+  | "peaceful"
+  | "happy"
+  | "curious"
+  | "nostalgic"
+  | "anxious"
+  | "strange"
+  | string;
 
 export type DreamEntry = {
   id: string;
+  clientId?: string | null;
   workspaceId: string;
   authorId: string;
   title: string;

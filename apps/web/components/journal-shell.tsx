@@ -4,6 +4,8 @@ import {
   BookHeart,
   CalendarDays,
   ChevronRight,
+  Cloud,
+  CloudOff,
   Heart,
   LockKeyhole,
   MoonStar,
@@ -19,10 +21,21 @@ type ThemeId = "lavender" | "rose" | "sage" | "midnight";
 
 type Dream = {
   id: string;
+  clientId: string | null;
   title: string;
   body: string;
-  date: string;
+  dreamedAt: string;
   mood: string;
+  tags: string[];
+};
+
+type ApiDream = {
+  id: string;
+  clientId: string | null;
+  title: string;
+  content: string;
+  dreamedAt: string;
+  mood: string | null;
   tags: string[];
 };
 
@@ -33,63 +46,78 @@ const themes: Array<{ id: ThemeId; name: string; note: string }> = [
   { id: "midnight", name: "Stargazer", note: "deep & celestial" },
 ];
 
-const starterDreams: Dream[] = [
-  {
-    id: "moonlit-train",
-    title: "The moonlit train",
-    body: "I was on an old train moving through a field at night. Every window showed a different season. I remember feeling strangely peaceful, like I was going somewhere I already knew.",
-    date: "October 3, 2026",
-    mood: "peaceful",
-    tags: ["train", "night", "journey"],
-  },
-  {
-    id: "blue-house",
-    title: "The little blue house",
-    body: "There was a tiny blue house at the end of a road I could not remember. Someone had left the porch light on for me.",
-    date: "September 29, 2026",
-    mood: "nostalgic",
-    tags: ["home", "blue", "light"],
-  },
-  {
-    id: "garden-rain",
-    title: "Rain in the garden",
-    body: "It rained only inside the garden. Outside the gate everything was bright and dry, but I did not want to leave.",
-    date: "September 23, 2026",
-    mood: "curious",
-    tags: ["rain", "garden"],
-  },
-];
-
 const moodOptions = ["peaceful", "happy", "curious", "nostalgic", "anxious", "strange"];
+
+function mapDream(dream: ApiDream): Dream {
+  return {
+    id: dream.id,
+    clientId: dream.clientId,
+    title: dream.title,
+    body: dream.content,
+    dreamedAt: dream.dreamedAt,
+    mood: dream.mood ?? "unspoken",
+    tags: dream.tags,
+  };
+}
+
+function displayDate(value: string, year = true) {
+  return new Intl.DateTimeFormat("en", {
+    month: "long",
+    day: "numeric",
+    ...(year ? { year: "numeric" as const } : {}),
+  }).format(new Date(value));
+}
 
 export function JournalShell() {
   const [theme, setTheme] = useState<ThemeId>("lavender");
-  const [dreams, setDreams] = useState<Dream[]>(starterDreams);
+  const [dreams, setDreams] = useState<Dream[]>([]);
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState(starterDreams[0].id);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [mood, setMood] = useState("peaceful");
+  const [loading, setLoading] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("lucid.theme") as ThemeId | null;
-    const savedDreams = window.localStorage.getItem("lucid.dreams");
+    if (savedTheme && themes.some((item) => item.id === savedTheme)) {
+      setTheme(savedTheme);
+    }
 
-    if (savedTheme && themes.some((item) => item.id === savedTheme)) setTheme(savedTheme);
-
-    if (savedDreams) {
+    async function loadJournal() {
       try {
-        const parsed = JSON.parse(savedDreams) as Dream[];
-        if (Array.isArray(parsed) && parsed.length) {
-          setDreams(parsed);
-          setSelectedId(parsed[0].id);
+        const [dreamResponse, preferenceResponse] = await Promise.all([
+          fetch("/api/dreams", { cache: "no-store" }),
+          fetch("/api/preferences", { cache: "no-store" }),
+        ]);
+
+        if (!dreamResponse.ok) throw new Error("database-unavailable");
+
+        const dreamPayload = (await dreamResponse.json()) as { dreams: ApiDream[] };
+        const nextDreams = dreamPayload.dreams.map(mapDream);
+        setDreams(nextDreams);
+        setSelectedId(nextDreams[0]?.id ?? null);
+
+        if (preferenceResponse.ok) {
+          const payload = await preferenceResponse.json();
+          const databaseTheme = payload.preferences?.theme as ThemeId | undefined;
+          if (databaseTheme && themes.some((item) => item.id === databaseTheme)) {
+            setTheme(databaseTheme);
+            window.localStorage.setItem("lucid.theme", databaseTheme);
+          }
         }
       } catch {
-        // Ignore malformed local preview data.
+        setSyncError("Your journal could not reach Neon yet.");
+      } finally {
+        setLoading(false);
       }
     }
+
+    void loadJournal();
   }, []);
 
   const filteredDreams = useMemo(() => {
@@ -105,33 +133,48 @@ export function JournalShell() {
   function chooseTheme(nextTheme: ThemeId) {
     setTheme(nextTheme);
     window.localStorage.setItem("lucid.theme", nextTheme);
+    void fetch("/api/preferences", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: nextTheme }),
+    }).catch(() => undefined);
   }
 
-  function saveDream(event: FormEvent<HTMLFormElement>) {
+  async function saveDream(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!body.trim()) return;
+    if (!body.trim() || saving) return;
 
-    const next: Dream = {
-      id: crypto.randomUUID(),
-      title: title.trim() || "Untitled dream",
-      body: body.trim(),
-      date: new Intl.DateTimeFormat("en", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      }).format(new Date()),
-      mood,
-      tags: [],
-    };
+    setSaving(true);
+    setSyncError(null);
 
-    const nextDreams = [next, ...dreams];
-    setDreams(nextDreams);
-    setSelectedId(next.id);
-    window.localStorage.setItem("lucid.dreams", JSON.stringify(nextDreams));
-    setTitle("");
-    setBody("");
-    setMood("peaceful");
-    setComposerOpen(false);
+    try {
+      const response = await fetch("/api/dreams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: crypto.randomUUID(),
+          title,
+          content: body,
+          mood,
+          dreamedAt: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) throw new Error("save-failed");
+
+      const payload = (await response.json()) as { dream: ApiDream };
+      const next = mapDream(payload.dream);
+      setDreams((current) => [next, ...current.filter((item) => item.id !== next.id)]);
+      setSelectedId(next.id);
+      setTitle("");
+      setBody("");
+      setMood("peaceful");
+      setComposerOpen(false);
+    } catch {
+      setSyncError("This dream was not saved. Please try again when Lucid is connected.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -146,6 +189,10 @@ export function JournalShell() {
         </a>
         <div className="top-actions">
           <span className="privacy"><LockKeyhole size={13} /> Private journal</span>
+          <span className={"sync-state " + (syncError ? "offline" : "online")}>
+            {syncError ? <CloudOff size={13} /> : <Cloud size={13} />}
+            {loading ? "Opening..." : syncError ? "Not synced" : "Neon synced"}
+          </span>
           <button className="icon-button" onClick={() => setCustomizeOpen(true)} aria-label="Customize journal">
             <Palette size={18} />
           </button>
@@ -172,6 +219,8 @@ export function JournalShell() {
               <ChevronRight size={17} />
             </button>
 
+            {syncError && <div className="sync-warning">{syncError}</div>}
+
             <label className="search-field">
               <Search size={16} />
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search my dreams..." />
@@ -182,33 +231,55 @@ export function JournalShell() {
                 <span>Recent pages</span>
                 <CalendarDays size={14} />
               </div>
-              {filteredDreams.map((dream) => (
+
+              {loading && <div className="empty-search">Opening your dream book...</div>}
+
+              {!loading && filteredDreams.map((dream) => (
                 <button
                   key={dream.id}
                   className={"entry-preview " + (dream.id === selectedDream?.id ? "active" : "")}
                   onClick={() => setSelectedId(dream.id)}
                 >
-                  <span className="entry-date">{dream.date.replace(", 2026", "")}</span>
+                  <span className="entry-date">{displayDate(dream.dreamedAt, false)}</span>
                   <strong>{dream.title}</strong>
                   <p>{dream.body}</p>
                 </button>
               ))}
-              {!filteredDreams.length && <div className="empty-search">No page in your journal matches that yet.</div>}
+
+              {!loading && !filteredDreams.length && query && (
+                <div className="empty-search">No page in your journal matches that yet.</div>
+              )}
+
+              {!loading && !dreams.length && !query && (
+                <button className="first-page-card" onClick={() => setComposerOpen(true)}>
+                  <span>☾</span>
+                  <strong>Your first page is waiting.</strong>
+                  <p>Even one image, feeling, person or colour is enough to begin.</p>
+                </button>
+              )}
             </div>
 
             <div className="index-footer">
               <Sparkles size={14} />
-              <span>3 little patterns are waiting to be explored</span>
+              <span>
+                {dreams.length >= 3
+                  ? "Lucid is beginning to notice little threads between your dreams."
+                  : "The more you remember, the more personal this book becomes."}
+              </span>
             </div>
           </aside>
 
           <article className="journal-page">
             <div className="binding-line" />
-            <div className="page-tape">dream no. {dreams.findIndex((item) => item.id === selectedDream?.id) + 1}</div>
+            {selectedDream && (
+              <div className="page-tape">
+                dream no. {dreams.findIndex((item) => item.id === selectedDream.id) + 1}
+              </div>
+            )}
 
             {selectedDream ? (
               <>
-                <div className="page-date">{selectedDream.date}</div>
+                <div className="page-date">{displayDate(selectedDream.dreamedAt)}</div>
                 <h2>{selectedDream.title}</h2>
                 <div className="mood-line">
                   <span className={"mood-dot mood-" + selectedDream.mood} />
@@ -226,7 +297,7 @@ export function JournalShell() {
                   <div className="reflection-icon"><Sparkles size={17} /></div>
                   <div>
                     <span className="reflection-label">A gentle reflection</span>
-                    <p>Lucid will notice repeating people, places and feelings across your journal without deciding what your dream must mean.</p>
+                    <p>As this journal grows, Lucid can notice repeating people, places and feelings without deciding what your dream must mean.</p>
                     <button>Explore this dream <ChevronRight size={14} /></button>
                   </div>
                 </div>
@@ -240,6 +311,7 @@ export function JournalShell() {
               <div className="blank-page">
                 <BookHeart size={36} />
                 <h2>Your journal is ready.</h2>
+                <p>No sample dreams. No pretend memories. This book begins with yours.</p>
                 <button onClick={() => setComposerOpen(true)}>Write your first dream</button>
               </div>
             )}
@@ -259,9 +331,9 @@ export function JournalShell() {
       </nav>
 
       {composerOpen && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposerOpen(false)}>
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => !saving && setComposerOpen(false)}>
           <form className="composer paper-modal" onSubmit={saveDream} onMouseDown={(event) => event.stopPropagation()}>
-            <button type="button" className="modal-close" onClick={() => setComposerOpen(false)}><X size={18} /></button>
+            <button type="button" className="modal-close" disabled={saving} onClick={() => setComposerOpen(false)}><X size={18} /></button>
             <p className="eyebrow">New dream page</p>
             <h2>What do you remember?</h2>
             <p className="modal-intro">Fragments count. You do not have to make it make sense yet.</p>
@@ -280,8 +352,8 @@ export function JournalShell() {
               </div>
             </div>
 
-            <button className="save-page" type="submit" disabled={!body.trim()}>
-              Keep this dream <Heart size={16} />
+            <button className="save-page" type="submit" disabled={!body.trim() || saving}>
+              {saving ? "Keeping your dream..." : "Keep this dream"} <Heart size={16} />
             </button>
           </form>
         </div>
