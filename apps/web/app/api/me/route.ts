@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { route } from "@/lib/api";
 import { isAuthConfigured } from "@/lib/auth/server";
 import { monthlyUsage, workspaceEntitlements } from "@/lib/entitlements";
-import { isOpenAIConfigured } from "@/lib/openai";
+import { isTranscriptionConfigured } from "@/lib/openai";
 import { loadPreferences } from "@/lib/preferences";
 import { getRequestContext } from "@/lib/session";
 import { listEntryTemplates, listJournalStyles } from "@/lib/templates";
@@ -57,6 +57,6 @@ export const GET = route("load me", async (request: Request) => {
       limits: entitlements.limits,
       usage: { transcriptions },
     },
-    features: { voice: isOpenAIConfigured(), accounts: isAuthConfigured() },
+    features: { voice: isTranscriptionConfigured(), accounts: isAuthConfigured() },
   });
 });

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { ApiError, requireRole, route } from "@/lib/api";
 import { consumeMonthlyUsage, refundMonthlyUsage, workspaceEntitlements } from "@/lib/entitlements";
 import { getRequestContext } from "@/lib/session";
-import { isOpenAIConfigured, transcribeAudio } from "@/lib/openai";
+import { isTranscriptionConfigured, transcribeAudio } from "@/lib/openai";
 
 export const runtime = "nodejs";
 
@@ -12,7 +12,7 @@ export const POST = route("transcribe", async (request: Request) => {
   const context = await getRequestContext(request);
   requireRole(context, "MEMBER");
 
-  if (!isOpenAIConfigured()) {
+  if (!isTranscriptionConfigured()) {
     throw new ApiError(503, "Voice transcription is not configured for this Tardemah environment yet.");
   }
 

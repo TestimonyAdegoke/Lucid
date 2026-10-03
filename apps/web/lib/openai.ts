@@ -12,26 +12,61 @@ export function isOpenAIConfigured() {
   return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
+export function isTranscriptionConfigured() {
+  return Boolean(process.env.GROQ_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim());
+}
+
 export async function transcribeAudio(file: File) {
-  const key = apiKey();
-  const form = new FormData();
-  form.append("file", file, file.name || "dream-audio");
-  form.append("model", process.env.OPENAI_TRANSCRIPTION_MODEL?.trim() || "gpt-transcribe");
+  const groqKey = process.env.GROQ_API_KEY?.trim();
+  const openAiKey = process.env.OPENAI_API_KEY?.trim();
 
-  const response = await fetch(OPENAI_API_BASE + "/audio/transcriptions", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + key },
-    body: form,
-  });
+  // Prefer Groq (fast & free tier with whisper-large-v3-turbo) if available
+  if (groqKey) {
+    const form = new FormData();
+    form.append("file", file, file.name || "dream-audio.webm");
+    form.append("model", process.env.GROQ_TRANSCRIPTION_MODEL?.trim() || "whisper-large-v3-turbo");
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error("Transcription failed: " + response.status + " " + detail.slice(0, 300));
+    const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + groqKey },
+      body: form,
+    });
+
+    if (response.ok) {
+      const payload = (await response.json()) as { text?: string };
+      if (payload.text?.trim()) return payload.text.trim();
+    } else {
+      const detail = await response.text().catch(() => "");
+      console.warn("Groq transcription failed (" + response.status + "), falling back to OpenAI if available:", detail.slice(0, 200));
+      if (!openAiKey) {
+        throw new Error("Groq transcription failed: " + response.status + " " + detail.slice(0, 300));
+      }
+    }
   }
 
-  const payload = await response.json() as { text?: string };
-  if (!payload.text?.trim()) throw new Error("Transcription returned no text.");
-  return payload.text.trim();
+  // OpenAI transcription
+  if (openAiKey) {
+    const form = new FormData();
+    form.append("file", file, file.name || "dream-audio.webm");
+    form.append("model", process.env.OPENAI_TRANSCRIPTION_MODEL?.trim() || "whisper-1");
+
+    const response = await fetch(OPENAI_API_BASE + "/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + openAiKey },
+      body: form,
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error("Transcription failed: " + response.status + " " + detail.slice(0, 300));
+    }
+
+    const payload = (await response.json()) as { text?: string };
+    if (!payload.text?.trim()) throw new Error("Transcription returned no text.");
+    return payload.text.trim();
+  }
+
+  throw new OpenAIConfigurationError("Neither GROQ_API_KEY nor OPENAI_API_KEY is configured.");
 }
 
 function readResponseText(payload: unknown) {
