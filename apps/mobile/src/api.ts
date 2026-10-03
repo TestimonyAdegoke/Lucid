@@ -17,6 +17,31 @@ export type ApiDream = {
   isFavorite: boolean;
 };
 
+export type DreamGraphData = {
+  dreams: Array<{
+    id: string;
+    title: string;
+    dreamedAt: string;
+    mood: string | null;
+    isFavorite: boolean;
+  }>;
+  entities: Array<{
+    id: string;
+    kind: string;
+    label: string;
+    count: number;
+    dreamIds: string[];
+  }>;
+  edges: Array<{
+    from: string;
+    to: string;
+    strength: number;
+    kind: "entity" | "connection";
+    sharedEntities?: string[];
+    sharedTags?: string[];
+  }>;
+};
+
 function apiBaseUrl() {
   const value = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/$/, "");
   if (!value) throw new Error("EXPO_PUBLIC_API_URL is not configured.");
@@ -32,16 +57,21 @@ async function sessionToken() {
   return token;
 }
 
-async function lucidFetch(path: string, init?: RequestInit) {
+async function mobileHeaders(includeJson = true) {
   const token = await sessionToken();
+  return {
+    Accept: "application/json",
+    ...(includeJson ? { "Content-Type": "application/json" } : {}),
+    "x-lucid-client": "mobile",
+    "x-lucid-session": token,
+  };
+}
 
+async function lucidFetch(path: string, init?: RequestInit) {
   return fetch(apiBaseUrl() + path, {
     ...init,
     headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "x-lucid-client": "mobile",
-      "x-lucid-session": token,
+      ...(await mobileHeaders(true)),
       ...(init?.headers ?? {}),
     },
   });
@@ -98,4 +128,35 @@ export async function updateRemoteDream(id: string, input: Partial<{
 export async function deleteRemoteDream(id: string) {
   const response = await lucidFetch("/api/dreams/" + encodeURIComponent(id), { method: "DELETE" });
   if (!response.ok) throw new Error("Unable to delete dream remotely.");
+}
+
+export async function transcribeRemoteAudio(uri: string) {
+  const form = new FormData();
+  form.append(
+    "audio",
+    {
+      uri,
+      name: "dream.m4a",
+      type: "audio/mp4",
+    } as unknown as Blob,
+  );
+
+  const response = await fetch(apiBaseUrl() + "/api/transcribe", {
+    method: "POST",
+    headers: await mobileHeaders(false),
+    body: form,
+  });
+
+  const payload = await response.json().catch(() => ({})) as { transcript?: string; error?: string };
+  if (!response.ok || !payload.transcript) {
+    throw new Error(payload.error || "Lucid could not transcribe that recording.");
+  }
+
+  return payload.transcript;
+}
+
+export async function fetchDreamGraph() {
+  const response = await lucidFetch("/api/graph");
+  if (!response.ok) throw new Error("Unable to open your Dream Map.");
+  return await response.json() as DreamGraphData;
 }

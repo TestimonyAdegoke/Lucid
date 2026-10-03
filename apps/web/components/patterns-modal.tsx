@@ -1,6 +1,6 @@
 "use client";
 
-import { MoonStar, Sparkles, Star, X } from "lucide-react";
+import { ArrowUpRight, MoonStar, Sparkles, Star, X } from "lucide-react";
 
 type PatternDream = {
   mood: string;
@@ -73,6 +73,7 @@ export function PatternsModal({ dreams, onClose }: { dreams: PatternDream[]; onC
                 )}
               </section>
             </div>
+            <a className="dream-map-link" href="/graph">Open my Dream Map <ArrowUpRight size={14} /></a>
           </>
         )}
       </section>

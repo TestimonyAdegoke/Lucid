@@ -20,6 +20,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DreamEditModal, EditableDream } from "@/components/dream-edit-modal";
 import { PatternsModal } from "@/components/patterns-modal";
+import { VoiceCapture } from "@/components/voice-capture";
 
 type ThemeId = "lavender" | "rose" | "sage" | "midnight";
 
@@ -354,6 +355,7 @@ export function JournalShell() {
             <button type="button" className="modal-close" disabled={saving} onClick={() => setComposerOpen(false)}><X size={18} /></button>
             <p className="eyebrow">New dream page</p><h2>What do you remember?</h2>
             <p className="modal-intro">Fragments count. You do not have to make it make sense yet.</p>
+            <VoiceCapture onTranscript={(transcript) => setBody((current) => current.trim() ? current.trim() + "\n\n" + transcript : transcript)} />
             <input className="title-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Give it a little title... (optional)" />
             <textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} placeholder="I was somewhere..." rows={9} />
             <div className="mood-picker"><span>I woke up feeling</span><div>
