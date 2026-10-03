@@ -16,6 +16,7 @@ import "./features.css";
 import "./auth.css";
 import "./graph.css";
 import "./landing.css";
+import { PwaRegister } from "@/components/pwa-register";
 
 const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap", axes: ["SOFT", "opsz"] });
 const lora = Lora({ subsets: ["latin"], variable: "--font-lora", display: "swap", style: ["normal", "italic"] });
@@ -40,6 +41,20 @@ export const metadata: Metadata = {
   description:
     "Tardemah is a private, beautiful dream journal for web and mobile. Speak or write your dreams the moment you wake, make the book your own, and gently notice what returns.",
   manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Tardemah",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
   openGraph: {
     title: "Tardemah — a dream book that remembers with you",
     description: "Capture dreams by voice or pen, design your own journal, and see the threads between your nights.",
@@ -50,14 +65,20 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f4eee8" },
-    { media: "(prefers-color-scheme: dark)", color: "#15131d" },
+    { media: "(prefers-color-scheme: dark)", color: "#14111d" },
   ],
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={fontVariables} suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        <PwaRegister />
+        {children}
+      </body>
     </html>
   );
 }
