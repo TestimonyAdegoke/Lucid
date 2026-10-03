@@ -10,8 +10,8 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function validToken(token: string | null) {
-  return Boolean(token && token.length >= 32 && token.length <= 256);
+function validToken(token: string | null | undefined): token is string {
+  return typeof token === "string" && token.length >= 32 && token.length <= 256;
 }
 
 async function resolveToken(request: Request) {
@@ -19,7 +19,7 @@ async function resolveToken(request: Request) {
 
   if (validToken(headerToken)) {
     return {
-      token: headerToken!,
+      token: headerToken,
       client: request.headers.get(CLIENT_HEADER) === "mobile" ? "mobile" : "web",
     } as const;
   }
@@ -27,7 +27,7 @@ async function resolveToken(request: Request) {
   const cookieStore = await cookies();
   let token = cookieStore.get(COOKIE_NAME)?.value;
 
-  if (!validToken(token ?? null)) {
+  if (!validToken(token)) {
     token = randomBytes(32).toString("base64url");
     cookieStore.set(COOKIE_NAME, token, {
       httpOnly: true,
